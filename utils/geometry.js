@@ -105,7 +105,7 @@ export function getValidPointsAndLength(map, anchorArray) {
     const totalLength = cumLengths.length > 0 ? cumLengths[cumLengths.length - 1] : 0;
     return { pts, totalLength, cumLengths, validCurveData };
 }
-export function calculateArrowOutlinePoints(map, pts, // These are our Point type
+export function calculateArrowOutlinePoints(pts, // These are our Point type
 totalLength, cumLengths, shaftThicknessPx, arrowHeadLengthPx, arrowHeadWidthPx) {
     if (!pts || pts.length < 2 || totalLength <= 1e-6) {
         return null;
