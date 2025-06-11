@@ -708,6 +708,7 @@ const App = () => {
         let aHLP = params.arrowHeadLengthPixels ?? 0;
         let aHWP = params.arrowHeadWidthPixels ?? 0;
         const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
+
         if (!outlinePoints)
             return null;
         try {
