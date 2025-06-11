@@ -167,16 +167,20 @@ const App: React.FC = () => {
         return updatedAnchors;
     });
 
-    if (currentAnchors.length + 1 <= 2) { 
+    const newCount = currentAnchors.length + 1;
+
+    if (newCount <= 2) {
       resetCurrentPixelValues();
-      if (currentAnchors.length + 1 === 2) { 
+      if (newCount === 2) {
         setCurrentShaftThicknessFactor(DEFAULT_SHAFT_THICKNESS_FACTOR);
         setCurrentArrowHeadLengthFactor(DEFAULT_ARROW_HEAD_LENGTH_FACTOR);
         setCurrentArrowHeadWidthFactor(DEFAULT_ARROW_HEAD_WIDTH_FACTOR);
+        updatePixelValuesFromFactors();
       }
+    } else {
+      updateFactorsFromPixelValues();
     }
-    updatePixelValuesFromFactors(); 
-  }, [currentAnchors.length, resetCurrentPixelValues, updatePixelValuesFromFactors]); 
+  }, [currentAnchors.length, resetCurrentPixelValues, updatePixelValuesFromFactors, updateFactorsFromPixelValues]);
 
   const onArrowDrag = useCallback((e: L.LeafletMouseEvent) => {
     const map = mapRef.current;
@@ -218,8 +222,8 @@ const App: React.FC = () => {
     map.off('mouseup', stopArrowDrag);
     map.dragging.enable();
     map.getContainer().style.cursor = (editingState === EditingState.DrawingNew) ? "crosshair" : "default";
-    updatePixelValuesFromFactors(); 
-  }, [editingState, onArrowDrag, updatePixelValuesFromFactors]);
+    updateFactorsFromPixelValues();
+  }, [editingState, onArrowDrag, updateFactorsFromPixelValues]);
 
   const startArrowDrag = useCallback((e: L.LeafletMouseEvent) => {
     const map = mapRef.current;
@@ -374,8 +378,8 @@ const App: React.FC = () => {
         }
         return newAnchors;
     });
-    updatePixelValuesFromFactors();
-  }, [resetCurrentPixelValues, updatePixelValuesFromFactors]);
+    updateFactorsFromPixelValues();
+  }, [resetCurrentPixelValues, updateFactorsFromPixelValues]);
   
   const handleGenericDragStart = useCallback((e: L.LeafletEvent) => {
     mapRef.current?.dragging.disable();
@@ -385,8 +389,8 @@ const App: React.FC = () => {
   const handleGenericDragEnd = useCallback((e: L.LeafletEvent) => {
     mapRef.current?.dragging.enable();
     if ((e as L.LeafletMouseEvent).originalEvent) L.DomEvent.stopPropagation((e as L.LeafletMouseEvent).originalEvent);
-    updatePixelValuesFromFactors(); 
-  }, [updatePixelValuesFromFactors]);
+    updateFactorsFromPixelValues();
+  }, [updateFactorsFromPixelValues]);
 
   const handleAnchorDragStart = useCallback((e: L.LeafletEvent, anchorId: string) => {
     handleGenericDragStart(e);
@@ -491,20 +495,9 @@ const App: React.FC = () => {
         handle2: a.handle2 || null,
     }));
 
-    let sThicknessPx = currentShaftThicknessPixels;
-    let ahLengthPx = currentArrowHeadLengthPixels;
-    let ahWidthPx = currentArrowHeadWidthPixels;
-
-    if (sThicknessPx === null || ahLengthPx === null || ahWidthPx === null) {
-        const { totalLength: currentTotalLength } = getValidPointsAndLength(map, getAnchorsData());
-        if (currentTotalLength > 1e-6) {
-            sThicknessPx = currentTotalLength * currentShaftThicknessFactor;
-            ahLengthPx = currentTotalLength * currentArrowHeadLengthFactor;
-            ahWidthPx = currentTotalLength * currentArrowHeadWidthFactor;
-        } else { 
-            sThicknessPx = 0; ahLengthPx = 0; ahWidthPx = 0;
-        }
-    }
+    let sThicknessPx = currentShaftThicknessPixels ?? 0;
+    let ahLengthPx = currentArrowHeadLengthPixels ?? 0;
+    let ahWidthPx = currentArrowHeadWidthPixels ?? 0;
     
     const finalArrowParams: ArrowParameters = {
       shaftThicknessPixels: sThicknessPx,
@@ -780,24 +773,6 @@ const App: React.FC = () => {
   }, [editingState, selectedArrowGroup, resetCurrentPixelValues, savedArrowsBackup]);
 
 
-  const handleSliderChange = useCallback((value: number, type: 'shaft' | 'headLength' | 'headWidth') => {
-    if (editingState === EditingState.Idle || currentAnchors.length < 2) return;
-    const map = mapRef.current;
-    if (!map) return;
-
-    const { totalLength } = getValidPointsAndLength(map, getAnchorsData());
-
-    if (type === 'shaft') {
-      setCurrentShaftThicknessFactor(value);
-      if (totalLength > 1e-6) setCurrentShaftThicknessPixels(totalLength * value); else setCurrentShaftThicknessPixels(0);
-    } else if (type === 'headLength') {
-      setCurrentArrowHeadLengthFactor(value);
-      if (totalLength > 1e-6) setCurrentArrowHeadLengthPixels(totalLength * value); else setCurrentArrowHeadLengthPixels(0);
-    } else if (type === 'headWidth') {
-      setCurrentArrowHeadWidthFactor(value);
-      if (totalLength > 1e-6) setCurrentArrowHeadWidthPixels(totalLength * value); else setCurrentArrowHeadWidthPixels(0);
-    }
-  }, [editingState, currentAnchors.length, getAnchorsData]);
 
   const generateGeoJsonForArrow = useCallback((anchorsData: AnchorData[], params: ArrowParameters, name: string): GeoJsonFeature | null => {
     const map = mapRef.current;
@@ -806,15 +781,9 @@ const App: React.FC = () => {
     const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsData);
     if (pts.length < 2) return null;
 
-    let sTP = params.shaftThicknessPixels;
-    let aHLP = params.arrowHeadLengthPixels;
-    let aHWP = params.arrowHeadWidthPixels;
-
-    if (sTP === null || aHLP === null || aHWP === null) { 
-        sTP = totalLength * DEFAULT_SHAFT_THICKNESS_FACTOR; 
-        aHLP = totalLength * DEFAULT_ARROW_HEAD_LENGTH_FACTOR;
-        aHWP = totalLength * DEFAULT_ARROW_HEAD_WIDTH_FACTOR;
-    }
+    let sTP = params.shaftThicknessPixels ?? 0;
+    let aHLP = params.arrowHeadLengthPixels ?? 0;
+    let aHWP = params.arrowHeadWidthPixels ?? 0;
 
     const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sTP, aHLP, aHWP);
     if (!outlinePoints) return null;
@@ -856,17 +825,10 @@ const App: React.FC = () => {
     let ahWidthPx = currentArrowHeadWidthPixels;
     const map = mapRef.current;
 
-    if ((sThicknessPx === null || ahLengthPx === null || ahWidthPx === null) && map) {
-        const { totalLength } = getValidPointsAndLength(map, getAnchorsData());
-        if (totalLength > 1e-6) {
-            if(sThicknessPx === null) sThicknessPx = totalLength * currentShaftThicknessFactor;
-            if(ahLengthPx === null) ahLengthPx = totalLength * currentArrowHeadLengthFactor;
-            if(ahWidthPx === null) ahWidthPx = totalLength * currentArrowHeadWidthFactor;
-        } else { 
-            sThicknessPx = sThicknessPx ?? 0; 
-            ahLengthPx = ahLengthPx ?? 0; 
-            ahWidthPx = ahWidthPx ?? 0;
-        }
+    if ((sThicknessPx === null || ahLengthPx === null || ahWidthPx === null)) {
+        sThicknessPx = sThicknessPx ?? 0;
+        ahLengthPx = ahLengthPx ?? 0;
+        ahWidthPx = ahWidthPx ?? 0;
     }
 
     const feature = generateGeoJsonForArrow(
@@ -1143,12 +1105,8 @@ const App: React.FC = () => {
         onDeleteArrow={handleDeleteSelectedArrow}
         canDeleteArrow={canDeleteArrow}
         shaftThicknessFactor={currentShaftThicknessFactor}
-        onShaftThicknessChange={(v) => handleSliderChange(v, 'shaft')}
         arrowHeadLengthFactor={currentArrowHeadLengthFactor}
-        onArrowHeadLengthChange={(v) => handleSliderChange(v, 'headLength')}
         arrowHeadWidthFactor={currentArrowHeadWidthFactor}
-        onArrowHeadWidthChange={(v) => handleSliderChange(v, 'headWidth')}
-        canEditParameters={canEditParameters}
         arrowName={currentArrowName}
         onArrowNameChange={setCurrentArrowName}
         canEditName={editingState !== EditingState.Idle}
