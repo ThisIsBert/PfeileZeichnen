@@ -1,0 +1,6 @@
+{
+  "name": "Leaflet Arrow Drawing Tool",
+  "description": "A web application for drawing and customizing bezier-curved arrows on a Leaflet map, with GeoJSON export functionality.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
