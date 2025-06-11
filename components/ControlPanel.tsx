@@ -11,12 +11,8 @@ interface ControlPanelProps {
   canDeleteArrow: boolean;  
   
   shaftThicknessFactor: number;
-  onShaftThicknessChange: (value: number) => void;
   arrowHeadLengthFactor: number;
-  onArrowHeadLengthChange: (value: number) => void;
   arrowHeadWidthFactor: number;
-  onArrowHeadWidthChange: (value: number) => void;
-  canEditParameters: boolean;
 
   arrowName: string;
   onArrowNameChange: (name: string) => void;
@@ -37,14 +33,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onCopyArrow,
   canCopyArrow,
   onDeleteArrow, 
-  canDeleteArrow, 
+  canDeleteArrow,
   shaftThicknessFactor,
-  onShaftThicknessChange,
   arrowHeadLengthFactor,
-  onArrowHeadLengthChange,
   arrowHeadWidthFactor,
-  onArrowHeadWidthChange,
-  canEditParameters,
   arrowName,
   onArrowNameChange,
   canEditName,
@@ -109,9 +101,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           max="0.1"
           step="0.005"
           value={shaftThicknessFactor}
-          onChange={(e) => onShaftThicknessChange(parseFloat(e.target.value))}
-          disabled={!canEditParameters}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
         />
       </div>
 
@@ -126,9 +117,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           max="0.2"
           step="0.01"
           value={arrowHeadLengthFactor}
-          onChange={(e) => onArrowHeadLengthChange(parseFloat(e.target.value))}
-          disabled={!canEditParameters}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
         />
       </div>
       
@@ -143,9 +133,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           max="0.2"
           step="0.01"
           value={arrowHeadWidthFactor}
-          onChange={(e) => onArrowHeadWidthChange(parseFloat(e.target.value))}
-          disabled={!canEditParameters}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
         />
       </div>
 
