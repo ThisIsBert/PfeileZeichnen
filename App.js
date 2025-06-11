@@ -839,18 +839,46 @@ const App = () => {
         }
         return () => { map.off('click', onMapClickHandler); };
     }, [editingState, currentAnchors.length, addAnchor]);
+   useEffect(() => {
+       if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
+           updateCurveAndArrowPreview();
+       }
+       else {
+           drawingLayerRef.current?.eachLayer(layer => {
+               if (layer.options?.isPreviewLine)
+                   drawingLayerRef.current?.removeLayer(layer);
+           });
+           editingArrowLayerRef.current?.clearLayers();
+       }
+   }, [currentAnchors, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
+
+    // Keep arrow thickness constant during zoom by recalculating shapes on zoom end
     useEffect(() => {
-        if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
-            updateCurveAndArrowPreview();
-        }
-        else {
-            drawingLayerRef.current?.eachLayer(layer => {
-                if (layer.options?.isPreviewLine)
-                    drawingLayerRef.current?.removeLayer(layer);
+        const map = mapRef.current;
+        if (!map)
+            return;
+        const handleZoom = () => {
+            if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
+                updateCurveAndArrowPreview();
+            }
+            arrowLayerRef.current?.eachLayer(layer => {
+                const arrowGroup = layer;
+                if (!arrowGroup.savedAnchors || !arrowGroup.arrowParameters)
+                    return;
+                const anchorsData = arrowGroup.savedAnchors.map(sa => ({ latlng: sa.latlng, handle1: sa.handle1, handle2: sa.handle2 }));
+                const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsData);
+                if (pts.length < 2)
+                    return;
+                const outline = calculateArrowOutlinePoints(pts, totalLength, cumLengths, arrowGroup.arrowParameters.shaftThicknessPixels ?? 0, arrowGroup.arrowParameters.arrowHeadLengthPixels ?? 0, arrowGroup.arrowParameters.arrowHeadWidthPixels ?? 0);
+                if (!outline)
+                    return;
+                const latlngs = outline.map(p => map.layerPointToLatLng(L.point(p.x, p.y)));
+                arrowGroup.eachLayer(l => l.setLatLngs(latlngs));
             });
-            editingArrowLayerRef.current?.clearLayers();
-        }
-    }, [currentAnchors, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
+        };
+        map.on('zoomend', handleZoom);
+        return () => { map.off('zoomend', handleZoom); };
+    }, [editingState, updateCurveAndArrowPreview]);
     // Effect for managing anchor/handle markers and connector lines
     useEffect(() => {
         const map = mapRef.current;

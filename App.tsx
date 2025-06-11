@@ -784,7 +784,9 @@ const App: React.FC = () => {
     let sTP = params.shaftThicknessPixels ?? 0;
     let aHLP = params.arrowHeadLengthPixels ?? 0;
     let aHWP = params.arrowHeadWidthPixels ?? 0;
+
 const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
+
 
     if (!outlinePoints) return null;
 
@@ -942,13 +944,58 @@ const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, 
   useEffect(() => {
     if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
       updateCurveAndArrowPreview();
-    } else { 
+    } else {
         drawingLayerRef.current?.eachLayer(layer => {
            if ((layer.options as CustomPathOptions)?.isPreviewLine) drawingLayerRef.current?.removeLayer(layer);
         });
         editingArrowLayerRef.current?.clearLayers();
     }
   }, [currentAnchors, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
+
+  // Keep arrow thickness constant during zoom by recalculating shapes on zoom end
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const handleZoom = () => {
+      if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
+        updateCurveAndArrowPreview();
+      }
+
+      arrowLayerRef.current?.eachLayer(layer => {
+        const arrowGroup = layer as ArrowGroup;
+        if (!arrowGroup.savedAnchors || !arrowGroup.arrowParameters) return;
+
+        const anchorsData: AnchorData[] = arrowGroup.savedAnchors.map(sa => ({
+          latlng: sa.latlng,
+          handle1: sa.handle1,
+          handle2: sa.handle2,
+        }));
+
+        const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsData);
+        if (pts.length < 2) return;
+
+        const outline = calculateArrowOutlinePoints(
+          pts,
+          totalLength,
+          cumLengths,
+          arrowGroup.arrowParameters.shaftThicknessPixels ?? 0,
+          arrowGroup.arrowParameters.arrowHeadLengthPixels ?? 0,
+          arrowGroup.arrowParameters.arrowHeadWidthPixels ?? 0,
+        );
+
+        if (!outline) return;
+
+        const latlngs = outline.map(p => map.layerPointToLatLng(L.point(p.x, p.y)));
+        arrowGroup.eachLayer(l => (l as L.Polygon).setLatLngs(latlngs as any));
+      });
+    };
+
+    map.on('zoomend', handleZoom);
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
+  }, [editingState, updateCurveAndArrowPreview]);
 
   // Effect for managing anchor/handle markers and connector lines
   useEffect(() => {
