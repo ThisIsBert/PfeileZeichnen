@@ -142,16 +142,20 @@ const App = () => {
             }
             return updatedAnchors;
         });
-        if (currentAnchors.length + 1 <= 2) {
+        const newCount = currentAnchors.length + 1;
+        if (newCount <= 2) {
             resetCurrentPixelValues();
-            if (currentAnchors.length + 1 === 2) {
+            if (newCount === 2) {
                 setCurrentShaftThicknessFactor(DEFAULT_SHAFT_THICKNESS_FACTOR);
                 setCurrentArrowHeadLengthFactor(DEFAULT_ARROW_HEAD_LENGTH_FACTOR);
                 setCurrentArrowHeadWidthFactor(DEFAULT_ARROW_HEAD_WIDTH_FACTOR);
+                updatePixelValuesFromFactors();
             }
         }
-        updatePixelValuesFromFactors();
-    }, [currentAnchors.length, resetCurrentPixelValues, updatePixelValuesFromFactors]);
+        else {
+            updateFactorsFromPixelValues();
+        }
+    }, [currentAnchors.length, resetCurrentPixelValues, updatePixelValuesFromFactors, updateFactorsFromPixelValues]);
     const onArrowDrag = useCallback((e) => {
         const map = mapRef.current;
         if (!isArrowDraggingRef.current || !map || !arrowDragStartPointRef.current)
@@ -193,8 +197,8 @@ const App = () => {
         map.off('mouseup', stopArrowDrag);
         map.dragging.enable();
         map.getContainer().style.cursor = (editingState === EditingState.DrawingNew) ? "crosshair" : "default";
-        updatePixelValuesFromFactors();
-    }, [editingState, onArrowDrag, updatePixelValuesFromFactors]);
+        updateFactorsFromPixelValues();
+    }, [editingState, onArrowDrag, updateFactorsFromPixelValues]);
     const startArrowDrag = useCallback((e) => {
         const map = mapRef.current;
         if (!map || currentAnchors.length < 1 || editingState === EditingState.Idle)
@@ -336,8 +340,8 @@ const App = () => {
             }
             return newAnchors;
         });
-        updatePixelValuesFromFactors();
-    }, [resetCurrentPixelValues, updatePixelValuesFromFactors]);
+        updateFactorsFromPixelValues();
+    }, [resetCurrentPixelValues, updateFactorsFromPixelValues]);
     const handleGenericDragStart = useCallback((e) => {
         mapRef.current?.dragging.disable();
         if (e.originalEvent)
@@ -347,8 +351,8 @@ const App = () => {
         mapRef.current?.dragging.enable();
         if (e.originalEvent)
             L.DomEvent.stopPropagation(e.originalEvent);
-        updatePixelValuesFromFactors();
-    }, [updatePixelValuesFromFactors]);
+        updateFactorsFromPixelValues();
+    }, [updateFactorsFromPixelValues]);
     const handleAnchorDragStart = useCallback((e, anchorId) => {
         handleGenericDragStart(e);
         const anchor = currentAnchors.find(a => a.id === anchorId);
