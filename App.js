@@ -452,22 +452,9 @@ const App = () => {
             handle1: a.handle1 || null,
             handle2: a.handle2 || null,
         }));
-        let sThicknessPx = currentShaftThicknessPixels;
-        let ahLengthPx = currentArrowHeadLengthPixels;
-        let ahWidthPx = currentArrowHeadWidthPixels;
-        if (sThicknessPx === null || ahLengthPx === null || ahWidthPx === null) {
-            const { totalLength: currentTotalLength } = getValidPointsAndLength(map, getAnchorsData());
-            if (currentTotalLength > 1e-6) {
-                sThicknessPx = currentTotalLength * currentShaftThicknessFactor;
-                ahLengthPx = currentTotalLength * currentArrowHeadLengthFactor;
-                ahWidthPx = currentTotalLength * currentArrowHeadWidthFactor;
-            }
-            else {
-                sThicknessPx = 0;
-                ahLengthPx = 0;
-                ahWidthPx = 0;
-            }
-        }
+        let sThicknessPx = currentShaftThicknessPixels ?? 0;
+        let ahLengthPx = currentArrowHeadLengthPixels ?? 0;
+        let ahWidthPx = currentArrowHeadWidthPixels ?? 0;
         const finalArrowParams = {
             shaftThicknessPixels: sThicknessPx,
             arrowHeadLengthPixels: ahLengthPx,
@@ -709,34 +696,7 @@ const App = () => {
         }
     }, [editingState, selectedArrowGroup, resetCurrentPixelValues, savedArrowsBackup]);
     const handleSliderChange = useCallback((value, type) => {
-        if (editingState === EditingState.Idle || currentAnchors.length < 2)
-            return;
-        const map = mapRef.current;
-        if (!map)
-            return;
-        const { totalLength } = getValidPointsAndLength(map, getAnchorsData());
-        if (type === 'shaft') {
-            setCurrentShaftThicknessFactor(value);
-            if (totalLength > 1e-6)
-                setCurrentShaftThicknessPixels(totalLength * value);
-            else
-                setCurrentShaftThicknessPixels(0);
-        }
-        else if (type === 'headLength') {
-            setCurrentArrowHeadLengthFactor(value);
-            if (totalLength > 1e-6)
-                setCurrentArrowHeadLengthPixels(totalLength * value);
-            else
-                setCurrentArrowHeadLengthPixels(0);
-        }
-        else if (type === 'headWidth') {
-            setCurrentArrowHeadWidthFactor(value);
-            if (totalLength > 1e-6)
-                setCurrentArrowHeadWidthPixels(totalLength * value);
-            else
-                setCurrentArrowHeadWidthPixels(0);
-        }
-    }, [editingState, currentAnchors.length, getAnchorsData]);
+    }, []);
     const generateGeoJsonForArrow = useCallback((anchorsData, params, name) => {
         const map = mapRef.current;
         if (!map || anchorsData.length < 2)
@@ -744,14 +704,9 @@ const App = () => {
         const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsData);
         if (pts.length < 2)
             return null;
-        let sTP = params.shaftThicknessPixels;
-        let aHLP = params.arrowHeadLengthPixels;
-        let aHWP = params.arrowHeadWidthPixels;
-        if (sTP === null || aHLP === null || aHWP === null) {
-            sTP = totalLength * DEFAULT_SHAFT_THICKNESS_FACTOR;
-            aHLP = totalLength * DEFAULT_ARROW_HEAD_LENGTH_FACTOR;
-            aHWP = totalLength * DEFAULT_ARROW_HEAD_WIDTH_FACTOR;
-        }
+        let sTP = params.shaftThicknessPixels ?? 0;
+        let aHLP = params.arrowHeadLengthPixels ?? 0;
+        let aHWP = params.arrowHeadWidthPixels ?? 0;
         const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sTP, aHLP, aHWP);
         if (!outlinePoints)
             return null;
@@ -788,22 +743,10 @@ const App = () => {
         let sThicknessPx = currentShaftThicknessPixels;
         let ahLengthPx = currentArrowHeadLengthPixels;
         let ahWidthPx = currentArrowHeadWidthPixels;
-        const map = mapRef.current;
-        if ((sThicknessPx === null || ahLengthPx === null || ahWidthPx === null) && map) {
-            const { totalLength } = getValidPointsAndLength(map, getAnchorsData());
-            if (totalLength > 1e-6) {
-                if (sThicknessPx === null)
-                    sThicknessPx = totalLength * currentShaftThicknessFactor;
-                if (ahLengthPx === null)
-                    ahLengthPx = totalLength * currentArrowHeadLengthFactor;
-                if (ahWidthPx === null)
-                    ahWidthPx = totalLength * currentArrowHeadWidthFactor;
-            }
-            else {
-                sThicknessPx = sThicknessPx ?? 0;
-                ahLengthPx = ahLengthPx ?? 0;
-                ahWidthPx = ahWidthPx ?? 0;
-            }
+        if (sThicknessPx === null || ahLengthPx === null || ahWidthPx === null) {
+            sThicknessPx = sThicknessPx ?? 0;
+            ahLengthPx = ahLengthPx ?? 0;
+            ahWidthPx = ahWidthPx ?? 0;
         }
         const feature = generateGeoJsonForArrow(getAnchorsData(), {
             shaftThicknessPixels: sThicknessPx,
@@ -1070,6 +1013,6 @@ const App = () => {
     const canDeleteArrow = editingState === EditingState.EditingSelected && selectedArrowGroup !== null;
     const canCopyGeoJsonCurrent = canEditParameters;
     const canSaveAllGeoJsonExport = editingState === EditingState.Idle && (arrowLayerRef.current?.getLayers().length ?? 0) > 0;
-    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { editingState: editingState, onDrawArrow: handleDrawArrow, onCopyArrow: handleCopyArrow, canCopyArrow: canCopyCurrentArrow, onDeleteArrow: handleDeleteSelectedArrow, canDeleteArrow: canDeleteArrow, shaftThicknessFactor: currentShaftThicknessFactor, onShaftThicknessChange: (v) => handleSliderChange(v, 'shaft'), arrowHeadLengthFactor: currentArrowHeadLengthFactor, onArrowHeadLengthChange: (v) => handleSliderChange(v, 'headLength'), arrowHeadWidthFactor: currentArrowHeadWidthFactor, onArrowHeadWidthChange: (v) => handleSliderChange(v, 'headWidth'), canEditParameters: canEditParameters, arrowName: currentArrowName, onArrowNameChange: setCurrentArrowName, canEditName: editingState !== EditingState.Idle, onCopyGeoJson: handleCopyGeoJson, canCopyGeoJson: canCopyGeoJsonCurrent, onSaveAllGeoJson: handleSaveAllGeoJson, canSaveAllGeoJson: canSaveAllGeoJsonExport, onConfirm: () => handleConfirm(true), onCancel: handleCancel })] }));
+    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { editingState: editingState, onDrawArrow: handleDrawArrow, onCopyArrow: handleCopyArrow, canCopyArrow: canCopyCurrentArrow, onDeleteArrow: handleDeleteSelectedArrow, canDeleteArrow: canDeleteArrow, shaftThicknessFactor: currentShaftThicknessFactor, arrowHeadLengthFactor: currentArrowHeadLengthFactor, arrowHeadWidthFactor: currentArrowHeadWidthFactor, arrowName: currentArrowName, onArrowNameChange: setCurrentArrowName, canEditName: editingState !== EditingState.Idle, onCopyGeoJson: handleCopyGeoJson, canCopyGeoJson: canCopyGeoJsonCurrent, onSaveAllGeoJson: handleSaveAllGeoJson, canSaveAllGeoJson: canSaveAllGeoJsonExport, onConfirm: () => handleConfirm(true), onCancel: handleCancel })] }));
 };
 export default App;
