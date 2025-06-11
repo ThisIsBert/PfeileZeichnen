@@ -306,7 +306,7 @@ const App = () => {
         ahLengthPx = Math.min(ahLengthPx, totalLength);
         sThicknessPx = Math.max(0, sThicknessPx);
         ahWidthPx = Math.max(0, ahWidthPx);
-        const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
+        const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
         if (outlinePoints) {
             try {
                 const outlineLatLngs = outlinePoints.map(p => map.layerPointToLatLng(L.point(p.x, p.y)));
@@ -465,7 +465,7 @@ const App = () => {
             console.error("Finalize: Invalid points for geometry.");
             return null;
         }
-        const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
+        const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
         if (!outlinePoints) {
             console.warn("Finalize: No polygons generated for arrow.");
             return null;
@@ -550,7 +550,7 @@ const App = () => {
             const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsDataForGeom);
             if (pts.length < 2 || arrowData.arrowParameters.shaftThicknessPixels === null || arrowData.arrowParameters.arrowHeadLengthPixels === null || arrowData.arrowParameters.arrowHeadWidthPixels === null)
                 return;
-            const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, arrowData.arrowParameters.shaftThicknessPixels, arrowData.arrowParameters.arrowHeadLengthPixels, arrowData.arrowParameters.arrowHeadWidthPixels);
+            const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, arrowData.arrowParameters.shaftThicknessPixels, arrowData.arrowParameters.arrowHeadLengthPixels, arrowData.arrowParameters.arrowHeadWidthPixels);
             if (outlinePoints) {
                 const restoredGroup = L.layerGroup();
                 try {
@@ -707,7 +707,8 @@ const App = () => {
         let sTP = params.shaftThicknessPixels ?? 0;
         let aHLP = params.arrowHeadLengthPixels ?? 0;
         let aHWP = params.arrowHeadWidthPixels ?? 0;
-        const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sTP, aHLP, aHWP);
+        const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
+
         if (!outlinePoints)
             return null;
         try {

@@ -344,7 +344,7 @@ const App: React.FC = () => {
     sThicknessPx = Math.max(0, sThicknessPx);
     ahWidthPx = Math.max(0, ahWidthPx);
 
-    const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
 
     if (outlinePoints) {
       try {
@@ -511,7 +511,7 @@ const App: React.FC = () => {
       return null;
     }
 
-    const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
     
     if (!outlinePoints) {
         console.warn("Finalize: No polygons generated for arrow.");
@@ -605,9 +605,9 @@ const App: React.FC = () => {
         
         if (pts.length < 2 || arrowData.arrowParameters.shaftThicknessPixels === null || arrowData.arrowParameters.arrowHeadLengthPixels === null || arrowData.arrowParameters.arrowHeadWidthPixels === null) return;
 
-        const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, 
-            arrowData.arrowParameters.shaftThicknessPixels!, 
-            arrowData.arrowParameters.arrowHeadLengthPixels!, 
+        const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths,
+            arrowData.arrowParameters.shaftThicknessPixels!,
+            arrowData.arrowParameters.arrowHeadLengthPixels!,
             arrowData.arrowParameters.arrowHeadWidthPixels!
         );
 
@@ -784,8 +784,8 @@ const App: React.FC = () => {
     let sTP = params.shaftThicknessPixels ?? 0;
     let aHLP = params.arrowHeadLengthPixels ?? 0;
     let aHWP = params.arrowHeadWidthPixels ?? 0;
+const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
 
-    const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sTP, aHLP, aHWP);
     if (!outlinePoints) return null;
 
     try {
