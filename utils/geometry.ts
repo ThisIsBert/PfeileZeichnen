@@ -113,7 +113,6 @@ export function getValidPointsAndLength(map: L.Map | null, anchorArray: AnchorDa
 
 
 export function calculateArrowOutlinePoints(
-    map: L.Map,
     pts: Point[], // These are our Point type
     totalLength: number,
     cumLengths: number[],

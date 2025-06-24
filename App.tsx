@@ -36,6 +36,7 @@ const App: React.FC = () => {
   const [currentShaftThicknessPixels, setCurrentShaftThicknessPixels] = useState<number | null>(null);
   const [currentArrowHeadLengthPixels, setCurrentArrowHeadLengthPixels] = useState<number | null>(null);
   const [currentArrowHeadWidthPixels, setCurrentArrowHeadWidthPixels] = useState<number | null>(null);
+  const [currentParamsBaseZoom, setCurrentParamsBaseZoom] = useState<number | null>(null);
 
   const [currentArrowName, setCurrentArrowName] = useState<string>('');
   const [arrowNameCounter, setArrowNameCounter] = useState<number>(1);
@@ -73,6 +74,7 @@ const App: React.FC = () => {
       setCurrentShaftThicknessPixels(null);
       setCurrentArrowHeadLengthPixels(null);
       setCurrentArrowHeadWidthPixels(null);
+      setCurrentParamsBaseZoom(null);
       return;
     }
     const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
@@ -80,32 +82,36 @@ const App: React.FC = () => {
       setCurrentShaftThicknessPixels(totalLength * currentShaftThicknessFactor);
       setCurrentArrowHeadLengthPixels(totalLength * currentArrowHeadLengthFactor);
       setCurrentArrowHeadWidthPixels(totalLength * currentArrowHeadWidthFactor);
+      if (currentParamsBaseZoom === null) setCurrentParamsBaseZoom(mapRef.current.getZoom());
     } else {
       setCurrentShaftThicknessPixels(0);
       setCurrentArrowHeadLengthPixels(0);
       setCurrentArrowHeadWidthPixels(0);
+      if (currentParamsBaseZoom === null) setCurrentParamsBaseZoom(mapRef.current.getZoom());
     }
   }, [currentAnchors.length, getAnchorsData, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor]);
 
   const updateFactorsFromPixelValues = useCallback(() => {
     if (!mapRef.current || currentAnchors.length < 2) return;
     const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
+    const scale = currentParamsBaseZoom !== null ? mapRef.current.getZoomScale(mapRef.current.getZoom(), currentParamsBaseZoom) : 1;
 
     if (totalLength > 1e-6) {
-        if (currentShaftThicknessPixels !== null) setCurrentShaftThicknessFactor(Math.max(0.005, Math.min(0.1, currentShaftThicknessPixels / totalLength)));
-        if (currentArrowHeadLengthPixels !== null) setCurrentArrowHeadLengthFactor(Math.max(0.05, Math.min(0.2,currentArrowHeadLengthPixels / totalLength)));
-        if (currentArrowHeadWidthPixels !== null) setCurrentArrowHeadWidthFactor(Math.max(0.05, Math.min(0.2,currentArrowHeadWidthPixels / totalLength)));
-    } else { 
+        if (currentShaftThicknessPixels !== null) setCurrentShaftThicknessFactor(Math.max(0.005, Math.min(0.1, (currentShaftThicknessPixels * scale) / totalLength)));
+        if (currentArrowHeadLengthPixels !== null) setCurrentArrowHeadLengthFactor(Math.max(0.05, Math.min(0.2,(currentArrowHeadLengthPixels * scale) / totalLength)));
+        if (currentArrowHeadWidthPixels !== null) setCurrentArrowHeadWidthFactor(Math.max(0.05, Math.min(0.2,(currentArrowHeadWidthPixels * scale) / totalLength)));
+    } else {
         setCurrentShaftThicknessFactor(DEFAULT_SHAFT_THICKNESS_FACTOR);
         setCurrentArrowHeadLengthFactor(DEFAULT_ARROW_HEAD_LENGTH_FACTOR);
         setCurrentArrowHeadWidthFactor(DEFAULT_ARROW_HEAD_WIDTH_FACTOR);
     }
-  }, [currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels]);
+  }, [currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
 
   const resetCurrentPixelValues = useCallback(() => {
     setCurrentShaftThicknessPixels(null);
     setCurrentArrowHeadLengthPixels(null);
     setCurrentArrowHeadWidthPixels(null);
+    setCurrentParamsBaseZoom(null);
   }, []);
 
   const addAnchor = useCallback((latlng: L.LatLng | L.LatLngLiteral, index: number) => {
@@ -338,13 +344,16 @@ const App: React.FC = () => {
         setCurrentShaftThicknessPixels(sThicknessPx);
         setCurrentArrowHeadLengthPixels(ahLengthPx);
         setCurrentArrowHeadWidthPixels(ahWidthPx);
+        if (currentParamsBaseZoom === null) setCurrentParamsBaseZoom(map.getZoom());
     }
-     
-    ahLengthPx = Math.min(ahLengthPx, totalLength);
-    sThicknessPx = Math.max(0, sThicknessPx);
-    ahWidthPx = Math.max(0, ahWidthPx);
 
-    const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
+    const scale = currentParamsBaseZoom !== null ? map.getZoomScale(map.getZoom(), currentParamsBaseZoom) : 1;
+
+    ahLengthPx = Math.min(ahLengthPx * scale, totalLength);
+    sThicknessPx = Math.max(0, sThicknessPx * scale);
+    ahWidthPx = Math.max(0, ahWidthPx * scale);
+
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
 
     if (outlinePoints) {
       try {
@@ -498,11 +507,14 @@ const App: React.FC = () => {
     let sThicknessPx = currentShaftThicknessPixels ?? 0;
     let ahLengthPx = currentArrowHeadLengthPixels ?? 0;
     let ahWidthPx = currentArrowHeadWidthPixels ?? 0;
-    
+
+    const baseZoom = currentParamsBaseZoom ?? map.getZoom();
+
     const finalArrowParams: ArrowParameters = {
       shaftThicknessPixels: sThicknessPx,
       arrowHeadLengthPixels: ahLengthPx,
       arrowHeadWidthPixels: ahWidthPx,
+      baseZoom,
     };
 
     const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, getAnchorsData());
@@ -511,7 +523,8 @@ const App: React.FC = () => {
       return null;
     }
 
-    const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
+    const scale = map.getZoomScale(map.getZoom(), baseZoom);
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx * scale, ahLengthPx * scale, ahWidthPx * scale);
     
     if (!outlinePoints) {
         console.warn("Finalize: No polygons generated for arrow.");
@@ -578,6 +591,7 @@ const App: React.FC = () => {
     setCurrentShaftThicknessPixels(arrowGroupToSelect.arrowParameters.shaftThicknessPixels);
     setCurrentArrowHeadLengthPixels(arrowGroupToSelect.arrowParameters.arrowHeadLengthPixels);
     setCurrentArrowHeadWidthPixels(arrowGroupToSelect.arrowParameters.arrowHeadWidthPixels);
+    setCurrentParamsBaseZoom(arrowGroupToSelect.arrowParameters.baseZoom);
     
     updateFactorsFromPixelValues(); 
     
@@ -605,10 +619,12 @@ const App: React.FC = () => {
         
         if (pts.length < 2 || arrowData.arrowParameters.shaftThicknessPixels === null || arrowData.arrowParameters.arrowHeadLengthPixels === null || arrowData.arrowParameters.arrowHeadWidthPixels === null) return;
 
-        const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, 
-            arrowData.arrowParameters.shaftThicknessPixels!, 
-            arrowData.arrowParameters.arrowHeadLengthPixels!, 
-            arrowData.arrowParameters.arrowHeadWidthPixels!
+        const scale = arrowData.arrowParameters.baseZoom !== null ?
+            map.getZoomScale(map.getZoom(), arrowData.arrowParameters.baseZoom) : 1;
+        const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths,
+            (arrowData.arrowParameters.shaftThicknessPixels ?? 0) * scale,
+            (arrowData.arrowParameters.arrowHeadLengthPixels ?? 0) * scale,
+            (arrowData.arrowParameters.arrowHeadWidthPixels ?? 0) * scale
         );
 
         if (outlinePoints) {
@@ -684,6 +700,7 @@ const App: React.FC = () => {
         shaftThicknessPixels: currentShaftThicknessPixels,
         arrowHeadLengthPixels: currentArrowHeadLengthPixels,
         arrowHeadWidthPixels: currentArrowHeadWidthPixels,
+        baseZoom: currentParamsBaseZoom,
     };
     const currentNameVal = currentArrowName;
 
@@ -730,6 +747,7 @@ const App: React.FC = () => {
     setCurrentShaftThicknessPixels(currentPixelParams.shaftThicknessPixels);
     setCurrentArrowHeadLengthPixels(currentPixelParams.arrowHeadLengthPixels);
     setCurrentArrowHeadWidthPixels(currentPixelParams.arrowHeadWidthPixels);
+    setCurrentParamsBaseZoom(currentPixelParams.baseZoom);
     setCurrentArrowName(`${currentNameVal} (Kopie)`);
 
     updateFactorsFromPixelValues(); 
@@ -785,7 +803,12 @@ const App: React.FC = () => {
     let aHLP = params.arrowHeadLengthPixels ?? 0;
     let aHWP = params.arrowHeadWidthPixels ?? 0;
 
-    const outlinePoints = calculateArrowOutlinePoints(map, pts, totalLength, cumLengths, sTP, aHLP, aHWP);
+    const scale = params.baseZoom !== null ? map.getZoomScale(map.getZoom(), params.baseZoom) : 1;
+    sTP *= scale;
+    aHLP *= scale;
+    aHWP *= scale;
+
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
     if (!outlinePoints) return null;
 
     try {
@@ -833,10 +856,11 @@ const App: React.FC = () => {
 
     const feature = generateGeoJsonForArrow(
         getAnchorsData(),
-        { 
-            shaftThicknessPixels: sThicknessPx, 
-            arrowHeadLengthPixels: ahLengthPx, 
-            arrowHeadWidthPixels: ahWidthPx 
+        {
+            shaftThicknessPixels: sThicknessPx,
+            arrowHeadLengthPixels: ahLengthPx,
+            arrowHeadWidthPixels: ahWidthPx,
+            baseZoom: currentParamsBaseZoom ?? map?.getZoom() ?? 0
         },
         currentArrowName
     );
@@ -942,13 +966,14 @@ const App: React.FC = () => {
   useEffect(() => {
     if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
       updateCurveAndArrowPreview();
-    } else { 
+    } else {
         drawingLayerRef.current?.eachLayer(layer => {
            if ((layer.options as CustomPathOptions)?.isPreviewLine) drawingLayerRef.current?.removeLayer(layer);
         });
         editingArrowLayerRef.current?.clearLayers();
     }
   }, [currentAnchors, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
+
 
   // Effect for managing anchor/handle markers and connector lines
   useEffect(() => {
