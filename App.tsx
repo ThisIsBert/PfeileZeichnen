@@ -507,6 +507,7 @@ const App: React.FC = () => {
     let sThicknessPx = currentShaftThicknessPixels ?? 0;
     let ahLengthPx = currentArrowHeadLengthPixels ?? 0;
     let ahWidthPx = currentArrowHeadWidthPixels ?? 0;
+
     const baseZoom = currentParamsBaseZoom ?? map.getZoom();
 
     const finalArrowParams: ArrowParameters = {
@@ -801,6 +802,7 @@ const App: React.FC = () => {
     let sTP = params.shaftThicknessPixels ?? 0;
     let aHLP = params.arrowHeadLengthPixels ?? 0;
     let aHWP = params.arrowHeadWidthPixels ?? 0;
+
     const scale = params.baseZoom !== null ? map.getZoomScale(map.getZoom(), params.baseZoom) : 1;
     sTP *= scale;
     aHLP *= scale;

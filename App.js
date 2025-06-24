@@ -466,6 +466,7 @@ const App = () => {
         let sThicknessPx = currentShaftThicknessPixels ?? 0;
         let ahLengthPx = currentArrowHeadLengthPixels ?? 0;
         let ahWidthPx = currentArrowHeadWidthPixels ?? 0;
+
         const baseZoom = currentParamsBaseZoom ?? map.getZoom();
         const finalArrowParams = {
             shaftThicknessPixels: sThicknessPx,
@@ -725,11 +726,13 @@ const App = () => {
         let sTP = params.shaftThicknessPixels ?? 0;
         let aHLP = params.arrowHeadLengthPixels ?? 0;
         let aHWP = params.arrowHeadWidthPixels ?? 0;
+
         const scale = params.baseZoom !== null ? map.getZoomScale(map.getZoom(), params.baseZoom) : 1;
         sTP *= scale;
         aHLP *= scale;
         aHWP *= scale;
         const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
+
         if (!outlinePoints)
             return null;
         try {
