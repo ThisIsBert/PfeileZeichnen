@@ -114,13 +114,19 @@ const App: React.FC = () => {
 
   const handleArrowHeadLengthChange = useCallback((factor: number) => {
     setCurrentArrowHeadLengthFactor(factor);
-    updatePixelValuesFromFactors();
-  }, [updatePixelValuesFromFactors]);
+    if (mapRef.current && currentAnchors.length >= 2) {
+      const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
+      setCurrentArrowHeadLengthPixels(totalLength > 1e-6 ? totalLength * factor : 0);
+    }
+  }, [getAnchorsData, currentAnchors.length]);
 
   const handleArrowHeadWidthChange = useCallback((factor: number) => {
     setCurrentArrowHeadWidthFactor(factor);
-    updatePixelValuesFromFactors();
-  }, [updatePixelValuesFromFactors]);
+    if (mapRef.current && currentAnchors.length >= 2) {
+      const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
+      setCurrentArrowHeadWidthPixels(totalLength > 1e-6 ? totalLength * factor : 0);
+    }
+  }, [getAnchorsData, currentAnchors.length]);
 
   const resetCurrentPixelValues = useCallback(() => {
     setCurrentShaftThicknessPixels(null);
