@@ -1141,9 +1141,6 @@ const App: React.FC = () => {
         canCopyArrow={canCopyCurrentArrow}
         onDeleteArrow={handleDeleteSelectedArrow}
         canDeleteArrow={canDeleteArrow}
-        shaftThicknessFactor={currentShaftThicknessFactor}
-        arrowHeadLengthFactor={currentArrowHeadLengthFactor}
-        arrowHeadWidthFactor={currentArrowHeadWidthFactor}
         arrowName={currentArrowName}
         onArrowNameChange={setCurrentArrowName}
         canEditName={editingState !== EditingState.Idle}

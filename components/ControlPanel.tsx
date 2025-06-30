@@ -10,9 +10,6 @@ interface ControlPanelProps {
   onDeleteArrow: () => void; 
   canDeleteArrow: boolean;  
   
-  shaftThicknessFactor: number;
-  arrowHeadLengthFactor: number;
-  arrowHeadWidthFactor: number;
 
   arrowName: string;
   onArrowNameChange: (name: string) => void;
@@ -34,9 +31,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   canCopyArrow,
   onDeleteArrow, 
   canDeleteArrow,
-  shaftThicknessFactor,
-  arrowHeadLengthFactor,
-  arrowHeadWidthFactor,
   arrowName,
   onArrowNameChange,
   canEditName,
@@ -90,53 +84,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         </button>
       </div>
 
-      <div>
-        <label htmlFor="shaftThicknessSlider" className="block text-sm font-medium text-gray-700 mb-1">
-          Schaftdicke: {shaftThicknessFactor.toFixed(3)}
-        </label>
-        <input
-          type="range"
-          id="shaftThicknessSlider"
-          min="0.005"
-          max="0.1"
-          step="0.005"
-          value={shaftThicknessFactor}
-          disabled
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
-        />
-      </div>
-
-      <div>
-        <label htmlFor="arrowHeadLengthSlider" className="block text-sm font-medium text-gray-700 mb-1">
-          Pfeilspitzenlänge: {arrowHeadLengthFactor.toFixed(3)}
-        </label>
-        <input
-          type="range"
-          id="arrowHeadLengthSlider"
-          min="0.05"
-          max="0.2"
-          step="0.01"
-          value={arrowHeadLengthFactor}
-          disabled
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
-        />
-      </div>
-      
-      <div>
-        <label htmlFor="arrowHeadWidthSlider" className="block text-sm font-medium text-gray-700 mb-1">
-          Pfeilspitzenbreite: {arrowHeadWidthFactor.toFixed(3)}
-        </label>
-        <input
-          type="range"
-          id="arrowHeadWidthSlider"
-          min="0.05"
-          max="0.2"
-          step="0.01"
-          value={arrowHeadWidthFactor}
-          disabled
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
-        />
-      </div>
 
       <div className="mt-2 border-t border-gray-200 pt-3 flex flex-col gap-2">
         <label htmlFor="arrowNameInput" className="block text-sm font-medium text-gray-700">
