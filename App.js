@@ -374,11 +374,21 @@ const App = () => {
             let _handle2OffsetPixels = undefined;
             try {
                 const anchorPoint = map.latLngToLayerPoint(_oldLatLng);
-                if (anchor.handle1) {
+                const h1Marker = handle1MarkersRef.current.get(anchorId);
+                if (h1Marker) {
+                    const handle1Point = map.latLngToLayerPoint(h1Marker.getLatLng());
+                    _handle1OffsetPixels = pointSubtract(handle1Point, anchorPoint);
+                }
+                else if (anchor.handle1) {
                     const handle1Point = map.latLngToLayerPoint(L.latLng(anchor.handle1.lat, anchor.handle1.lng));
                     _handle1OffsetPixels = pointSubtract(handle1Point, anchorPoint);
                 }
-                if (anchor.handle2) {
+                const h2Marker = handle2MarkersRef.current.get(anchorId);
+                if (h2Marker) {
+                    const handle2Point = map.latLngToLayerPoint(h2Marker.getLatLng());
+                    _handle2OffsetPixels = pointSubtract(handle2Point, anchorPoint);
+                }
+                else if (anchor.handle2) {
                     const handle2Point = map.latLngToLayerPoint(L.latLng(anchor.handle2.lat, anchor.handle2.lng));
                     _handle2OffsetPixels = pointSubtract(handle2Point, anchorPoint);
                 }

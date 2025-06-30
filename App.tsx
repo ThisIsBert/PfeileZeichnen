@@ -406,20 +406,32 @@ const App: React.FC = () => {
     const anchor = currentAnchors.find(a => a.id === anchorId);
     const map = mapRef.current;
     if (anchor && map) {
-        const _oldLatLng = L.latLng(anchor.latlng.lat, anchor.latlng.lng); 
+        const _oldLatLng = L.latLng(anchor.latlng.lat, anchor.latlng.lng);
         let _handle1OffsetPixels: GeomPoint | undefined = undefined;
         let _handle2OffsetPixels: GeomPoint | undefined = undefined;
         try {
-            const anchorPoint = map.latLngToLayerPoint(_oldLatLng); 
-            if (anchor.handle1) {
-                const handle1Point = map.latLngToLayerPoint(L.latLng(anchor.handle1.lat, anchor.handle1.lng)); 
-                _handle1OffsetPixels = pointSubtract(handle1Point, anchorPoint); 
+            const anchorPoint = map.latLngToLayerPoint(_oldLatLng);
+
+            const h1Marker = handle1MarkersRef.current.get(anchorId);
+            if (h1Marker) {
+                const handle1Point = map.latLngToLayerPoint(h1Marker.getLatLng());
+                _handle1OffsetPixels = pointSubtract(handle1Point, anchorPoint);
+            } else if (anchor.handle1) {
+                const handle1Point = map.latLngToLayerPoint(L.latLng(anchor.handle1.lat, anchor.handle1.lng));
+                _handle1OffsetPixels = pointSubtract(handle1Point, anchorPoint);
             }
-            if (anchor.handle2) {
-                const handle2Point = map.latLngToLayerPoint(L.latLng(anchor.handle2.lat, anchor.handle2.lng)); 
-                _handle2OffsetPixels = pointSubtract(handle2Point, anchorPoint); 
+
+            const h2Marker = handle2MarkersRef.current.get(anchorId);
+            if (h2Marker) {
+                const handle2Point = map.latLngToLayerPoint(h2Marker.getLatLng());
+                _handle2OffsetPixels = pointSubtract(handle2Point, anchorPoint);
+            } else if (anchor.handle2) {
+                const handle2Point = map.latLngToLayerPoint(L.latLng(anchor.handle2.lat, anchor.handle2.lng));
+                _handle2OffsetPixels = pointSubtract(handle2Point, anchorPoint);
             }
-        } catch (err) { console.error("DragStart offset error:", err); }
+        } catch (err) {
+            console.error("DragStart offset error:", err);
+        }
 
         setCurrentAnchors(prev => prev.map(a => a.id === anchorId ? { ...a, _oldLatLng, _handle1OffsetPixels, _handle2OffsetPixels } : a));
     }
