@@ -87,6 +87,21 @@ const App = () => {
             setCurrentArrowHeadWidthFactor(DEFAULT_ARROW_HEAD_WIDTH_FACTOR);
         }
     }, [currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
+
+    const handleShaftThicknessChange = useCallback((factor) => {
+        setCurrentShaftThicknessFactor(factor);
+        updatePixelValuesFromFactors();
+    }, [updatePixelValuesFromFactors]);
+
+    const handleArrowHeadLengthChange = useCallback((factor) => {
+        setCurrentArrowHeadLengthFactor(factor);
+        updatePixelValuesFromFactors();
+    }, [updatePixelValuesFromFactors]);
+
+    const handleArrowHeadWidthChange = useCallback((factor) => {
+        setCurrentArrowHeadWidthFactor(factor);
+        updatePixelValuesFromFactors();
+    }, [updatePixelValuesFromFactors]);
     const resetCurrentPixelValues = useCallback(() => {
         setCurrentShaftThicknessPixels(null);
         setCurrentArrowHeadLengthPixels(null);
@@ -555,9 +570,8 @@ const App = () => {
         setCurrentArrowHeadLengthPixels(arrowGroupToSelect.arrowParameters.arrowHeadLengthPixels);
         setCurrentArrowHeadWidthPixels(arrowGroupToSelect.arrowParameters.arrowHeadWidthPixels);
         setCurrentParamsBaseZoom(arrowGroupToSelect.arrowParameters.baseZoom);
-        updateFactorsFromPixelValues();
     }, [
-        editingState, saveStateForCancel, updateFactorsFromPixelValues, finalizeCurrentArrow
+        editingState, saveStateForCancel, finalizeCurrentArrow
     ]);
     useEffect(() => {
         handleSelectArrowRef.current = handleSelectArrow;
@@ -885,7 +899,11 @@ const App = () => {
            });
            editingArrowLayerRef.current?.clearLayers();
        }
-   }, [currentAnchors, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
+    }, [currentAnchors, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
+
+    useEffect(() => {
+        updateFactorsFromPixelValues();
+    }, [currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
 
     // Effect for managing anchor/handle markers and connector lines
     useEffect(() => {
@@ -1050,6 +1068,6 @@ const App = () => {
     const canDeleteArrow = editingState === EditingState.EditingSelected && selectedArrowGroup !== null;
     const canCopyGeoJsonCurrent = canEditParameters;
     const canSaveAllGeoJsonExport = editingState === EditingState.Idle && (arrowLayerRef.current?.getLayers().length ?? 0) > 0;
-    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { editingState: editingState, onDrawArrow: handleDrawArrow, onCopyArrow: handleCopyArrow, canCopyArrow: canCopyCurrentArrow, onDeleteArrow: handleDeleteSelectedArrow, canDeleteArrow: canDeleteArrow, shaftThicknessFactor: currentShaftThicknessFactor, arrowHeadLengthFactor: currentArrowHeadLengthFactor, arrowHeadWidthFactor: currentArrowHeadWidthFactor, arrowName: currentArrowName, onArrowNameChange: setCurrentArrowName, canEditName: editingState !== EditingState.Idle, onCopyGeoJson: handleCopyGeoJson, canCopyGeoJson: canCopyGeoJsonCurrent, onSaveAllGeoJson: handleSaveAllGeoJson, canSaveAllGeoJson: canSaveAllGeoJsonExport, onConfirm: () => handleConfirm(true), onCancel: handleCancel })] }));
+    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { editingState: editingState, onDrawArrow: handleDrawArrow, onCopyArrow: handleCopyArrow, canCopyArrow: canCopyCurrentArrow, onDeleteArrow: handleDeleteSelectedArrow, canDeleteArrow: canDeleteArrow, shaftThicknessFactor: currentShaftThicknessFactor, onShaftThicknessChange: handleShaftThicknessChange, arrowHeadLengthFactor: currentArrowHeadLengthFactor, onArrowHeadLengthChange: handleArrowHeadLengthChange, arrowHeadWidthFactor: currentArrowHeadWidthFactor, onArrowHeadWidthChange: handleArrowHeadWidthChange, canEditParameters: canEditParameters, arrowName: currentArrowName, onArrowNameChange: setCurrentArrowName, canEditName: editingState !== EditingState.Idle, onCopyGeoJson: handleCopyGeoJson, canCopyGeoJson: canCopyGeoJsonCurrent, onSaveAllGeoJson: handleSaveAllGeoJson, canSaveAllGeoJson: canSaveAllGeoJsonExport, onConfirm: () => handleConfirm(true), onCancel: handleCancel })] }));
 };
 export default App;
