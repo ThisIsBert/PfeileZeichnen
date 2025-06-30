@@ -7,12 +7,16 @@ interface ControlPanelProps {
   onDrawArrow: () => void;
   onCopyArrow: () => void;
   canCopyArrow: boolean;
-  onDeleteArrow: () => void; 
-  canDeleteArrow: boolean;  
-  
+  onDeleteArrow: () => void;
+  canDeleteArrow: boolean;
+
   shaftThicknessFactor: number;
+  onShaftThicknessChange: (factor: number) => void;
   arrowHeadLengthFactor: number;
+  onArrowHeadLengthChange: (factor: number) => void;
   arrowHeadWidthFactor: number;
+  onArrowHeadWidthChange: (factor: number) => void;
+  canEditParameters: boolean;
 
   arrowName: string;
   onArrowNameChange: (name: string) => void;
@@ -32,11 +36,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onDrawArrow,
   onCopyArrow,
   canCopyArrow,
-  onDeleteArrow, 
+  onDeleteArrow,
   canDeleteArrow,
   shaftThicknessFactor,
+  onShaftThicknessChange,
   arrowHeadLengthFactor,
+  onArrowHeadLengthChange,
   arrowHeadWidthFactor,
+  onArrowHeadWidthChange,
+  canEditParameters,
   arrowName,
   onArrowNameChange,
   canEditName,
@@ -101,8 +109,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           max="0.1"
           step="0.005"
           value={shaftThicknessFactor}
-          disabled
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
+          onChange={(e) => onShaftThicknessChange(parseFloat(e.target.value))}
+          disabled={!canEditParameters}
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 
@@ -117,8 +126,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           max="0.2"
           step="0.01"
           value={arrowHeadLengthFactor}
-          disabled
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
+          onChange={(e) => onArrowHeadLengthChange(parseFloat(e.target.value))}
+          disabled={!canEditParameters}
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
       
@@ -133,8 +143,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           max="0.2"
           step="0.01"
           value={arrowHeadWidthFactor}
-          disabled
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed opacity-50"
+          onChange={(e) => onArrowHeadWidthChange(parseFloat(e.target.value))}
+          disabled={!canEditParameters}
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 

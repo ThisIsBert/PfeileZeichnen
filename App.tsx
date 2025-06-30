@@ -107,6 +107,27 @@ const App: React.FC = () => {
     }
   }, [currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
 
+  const handleShaftThicknessChange = useCallback((factor: number) => {
+    setCurrentShaftThicknessFactor(factor);
+    updatePixelValuesFromFactors();
+  }, [updatePixelValuesFromFactors]);
+
+  const handleArrowHeadLengthChange = useCallback((factor: number) => {
+    setCurrentArrowHeadLengthFactor(factor);
+    if (mapRef.current && currentAnchors.length >= 2) {
+      const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
+      setCurrentArrowHeadLengthPixels(totalLength > 1e-6 ? totalLength * factor : 0);
+    }
+  }, [getAnchorsData, currentAnchors.length]);
+
+  const handleArrowHeadWidthChange = useCallback((factor: number) => {
+    setCurrentArrowHeadWidthFactor(factor);
+    if (mapRef.current && currentAnchors.length >= 2) {
+      const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
+      setCurrentArrowHeadWidthPixels(totalLength > 1e-6 ? totalLength * factor : 0);
+    }
+  }, [getAnchorsData, currentAnchors.length]);
+
   const resetCurrentPixelValues = useCallback(() => {
     setCurrentShaftThicknessPixels(null);
     setCurrentArrowHeadLengthPixels(null);
@@ -605,10 +626,8 @@ const App: React.FC = () => {
     setCurrentArrowHeadWidthPixels(arrowGroupToSelect.arrowParameters.arrowHeadWidthPixels);
     setCurrentParamsBaseZoom(arrowGroupToSelect.arrowParameters.baseZoom);
     
-    updateFactorsFromPixelValues(); 
-    
   }, [
-    editingState, saveStateForCancel, updateFactorsFromPixelValues, finalizeCurrentArrow
+    editingState, saveStateForCancel, finalizeCurrentArrow
   ]);
 
   useEffect(() => {
@@ -986,6 +1005,10 @@ const App: React.FC = () => {
     }
   }, [currentAnchors, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
 
+  useEffect(() => {
+    updateFactorsFromPixelValues();
+  }, [currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
+
 
   // Effect for managing anchor/handle markers and connector lines
   useEffect(() => {
@@ -1142,8 +1165,12 @@ const App: React.FC = () => {
         onDeleteArrow={handleDeleteSelectedArrow}
         canDeleteArrow={canDeleteArrow}
         shaftThicknessFactor={currentShaftThicknessFactor}
+        onShaftThicknessChange={handleShaftThicknessChange}
         arrowHeadLengthFactor={currentArrowHeadLengthFactor}
+        onArrowHeadLengthChange={handleArrowHeadLengthChange}
         arrowHeadWidthFactor={currentArrowHeadWidthFactor}
+        onArrowHeadWidthChange={handleArrowHeadWidthChange}
+        canEditParameters={canEditParameters}
         arrowName={currentArrowName}
         onArrowNameChange={setCurrentArrowName}
         canEditName={editingState !== EditingState.Idle}
