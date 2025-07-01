@@ -109,8 +109,11 @@ const App: React.FC = () => {
 
   const handleShaftThicknessChange = useCallback((factor: number) => {
     setCurrentShaftThicknessFactor(factor);
-    updatePixelValuesFromFactors();
-  }, [updatePixelValuesFromFactors]);
+    if (mapRef.current && currentAnchors.length >= 2) {
+      const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
+      setCurrentShaftThicknessPixels(totalLength > 1e-6 ? totalLength * factor : 0);
+    }
+  }, [getAnchorsData, currentAnchors.length]);
 
   const handleArrowHeadLengthChange = useCallback((factor: number) => {
     setCurrentArrowHeadLengthFactor(factor);
