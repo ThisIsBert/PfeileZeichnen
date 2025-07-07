@@ -4,6 +4,7 @@ import L from 'leaflet';
 export const DEFAULT_SHAFT_THICKNESS_FACTOR = 0.05;
 export const DEFAULT_ARROW_HEAD_LENGTH_FACTOR = 0.125;
 export const DEFAULT_ARROW_HEAD_WIDTH_FACTOR = 0.125;
+export const DEFAULT_TAIL_THICKNESS_FACTOR = 0.08;
 
 export const HANDLE_OFFSET_ON_LINE_PIXELS = 30; 
 

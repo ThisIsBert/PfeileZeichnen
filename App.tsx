@@ -30,10 +30,12 @@ const App: React.FC = () => {
   const [selectedArrowGroup, setSelectedArrowGroup] = useState<ArrowGroup | null>(null);
   
   const [currentShaftThicknessFactor, setCurrentShaftThicknessFactor] = useState<number>(DEFAULT_SHAFT_THICKNESS_FACTOR);
+  const [currentTailThicknessFactor, setCurrentTailThicknessFactor] = useState<number>(DEFAULT_TAIL_THICKNESS_FACTOR);
   const [currentArrowHeadLengthFactor, setCurrentArrowHeadLengthFactor] = useState<number>(DEFAULT_ARROW_HEAD_LENGTH_FACTOR);
   const [currentArrowHeadWidthFactor, setCurrentArrowHeadWidthFactor] = useState<number>(DEFAULT_ARROW_HEAD_WIDTH_FACTOR);
 
   const [currentShaftThicknessPixels, setCurrentShaftThicknessPixels] = useState<number | null>(null);
+  const [currentTailThicknessPixels, setCurrentTailThicknessPixels] = useState<number | null>(null);
   const [currentArrowHeadLengthPixels, setCurrentArrowHeadLengthPixels] = useState<number | null>(null);
   const [currentArrowHeadWidthPixels, setCurrentArrowHeadWidthPixels] = useState<number | null>(null);
   const [currentParamsBaseZoom, setCurrentParamsBaseZoom] = useState<number | null>(null);
@@ -72,6 +74,7 @@ const App: React.FC = () => {
   const updatePixelValuesFromFactors = useCallback(() => {
     if (!mapRef.current || currentAnchors.length < 2) {
       setCurrentShaftThicknessPixels(null);
+      setCurrentTailThicknessPixels(null);
       setCurrentArrowHeadLengthPixels(null);
       setCurrentArrowHeadWidthPixels(null);
       setCurrentParamsBaseZoom(null);
@@ -80,16 +83,18 @@ const App: React.FC = () => {
     const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
     if (totalLength > 1e-6) {
       setCurrentShaftThicknessPixels(totalLength * currentShaftThicknessFactor);
+      setCurrentTailThicknessPixels(totalLength * currentTailThicknessFactor);
       setCurrentArrowHeadLengthPixels(totalLength * currentArrowHeadLengthFactor);
       setCurrentArrowHeadWidthPixels(totalLength * currentArrowHeadWidthFactor);
       if (currentParamsBaseZoom === null) setCurrentParamsBaseZoom(mapRef.current.getZoom());
     } else {
       setCurrentShaftThicknessPixels(0);
+      setCurrentTailThicknessPixels(0);
       setCurrentArrowHeadLengthPixels(0);
       setCurrentArrowHeadWidthPixels(0);
       if (currentParamsBaseZoom === null) setCurrentParamsBaseZoom(mapRef.current.getZoom());
     }
-  }, [currentAnchors.length, getAnchorsData, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor]);
+  }, [currentAnchors.length, getAnchorsData, currentShaftThicknessFactor, currentTailThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor]);
 
   const updateFactorsFromPixelValues = useCallback(() => {
     if (!mapRef.current || currentAnchors.length < 2) return;
@@ -100,12 +105,14 @@ const App: React.FC = () => {
         if (currentShaftThicknessPixels !== null) setCurrentShaftThicknessFactor(Math.max(0.005, Math.min(0.1, (currentShaftThicknessPixels * scale) / totalLength)));
         if (currentArrowHeadLengthPixels !== null) setCurrentArrowHeadLengthFactor(Math.max(0.05, Math.min(0.2,(currentArrowHeadLengthPixels * scale) / totalLength)));
         if (currentArrowHeadWidthPixels !== null) setCurrentArrowHeadWidthFactor(Math.max(0.05, Math.min(0.2,(currentArrowHeadWidthPixels * scale) / totalLength)));
+        if (currentTailThicknessPixels !== null) setCurrentTailThicknessFactor(Math.max(0.05, Math.min(0.2,(currentTailThicknessPixels * scale) / totalLength)));
     } else {
         setCurrentShaftThicknessFactor(DEFAULT_SHAFT_THICKNESS_FACTOR);
         setCurrentArrowHeadLengthFactor(DEFAULT_ARROW_HEAD_LENGTH_FACTOR);
         setCurrentArrowHeadWidthFactor(DEFAULT_ARROW_HEAD_WIDTH_FACTOR);
+        setCurrentTailThicknessFactor(DEFAULT_TAIL_THICKNESS_FACTOR);
     }
-  }, [currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
+  }, [currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentTailThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
 
   const handleShaftThicknessChange = useCallback((factor: number) => {
     setCurrentShaftThicknessFactor(factor);
@@ -131,8 +138,17 @@ const App: React.FC = () => {
     }
   }, [getAnchorsData, currentAnchors.length]);
 
+  const handleTailThicknessChange = useCallback((factor: number) => {
+    setCurrentTailThicknessFactor(factor);
+    if (mapRef.current && currentAnchors.length >= 2) {
+      const { totalLength } = getValidPointsAndLength(mapRef.current, getAnchorsData());
+      setCurrentTailThicknessPixels(totalLength > 1e-6 ? totalLength * factor : 0);
+    }
+  }, [getAnchorsData, currentAnchors.length]);
+
   const resetCurrentPixelValues = useCallback(() => {
     setCurrentShaftThicknessPixels(null);
+    setCurrentTailThicknessPixels(null);
     setCurrentArrowHeadLengthPixels(null);
     setCurrentArrowHeadWidthPixels(null);
     setCurrentParamsBaseZoom(null);
@@ -377,7 +393,7 @@ const App: React.FC = () => {
     sThicknessPx = Math.max(0, sThicknessPx * scale);
     ahWidthPx = Math.max(0, ahWidthPx * scale);
 
-    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx);
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx, currentTailThicknessPixels !== null ? currentTailThicknessPixels * scale : totalLength * currentTailThicknessFactor * scale);
 
     if (outlinePoints) {
       try {
@@ -550,6 +566,7 @@ const App: React.FC = () => {
       shaftThicknessPixels: sThicknessPx,
       arrowHeadLengthPixels: ahLengthPx,
       arrowHeadWidthPixels: ahWidthPx,
+      tailThicknessPixels: currentTailThicknessPixels ?? 0,
       baseZoom,
     };
 
@@ -560,7 +577,7 @@ const App: React.FC = () => {
     }
 
     const scale = map.getZoomScale(map.getZoom(), baseZoom);
-    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx * scale, ahLengthPx * scale, ahWidthPx * scale);
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx * scale, ahLengthPx * scale, ahWidthPx * scale, (currentTailThicknessPixels ?? 0) * scale);
     
     if (!outlinePoints) {
         console.warn("Finalize: No polygons generated for arrow.");
@@ -625,6 +642,7 @@ const App: React.FC = () => {
     
     setCurrentArrowName(arrowGroupToSelect.arrowName);
     setCurrentShaftThicknessPixels(arrowGroupToSelect.arrowParameters.shaftThicknessPixels);
+    setCurrentTailThicknessPixels(arrowGroupToSelect.arrowParameters.tailThicknessPixels);
     setCurrentArrowHeadLengthPixels(arrowGroupToSelect.arrowParameters.arrowHeadLengthPixels);
     setCurrentArrowHeadWidthPixels(arrowGroupToSelect.arrowParameters.arrowHeadWidthPixels);
     setCurrentParamsBaseZoom(arrowGroupToSelect.arrowParameters.baseZoom);
@@ -658,7 +676,8 @@ const App: React.FC = () => {
         const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths,
             (arrowData.arrowParameters.shaftThicknessPixels ?? 0) * scale,
             (arrowData.arrowParameters.arrowHeadLengthPixels ?? 0) * scale,
-            (arrowData.arrowParameters.arrowHeadWidthPixels ?? 0) * scale
+            (arrowData.arrowParameters.arrowHeadWidthPixels ?? 0) * scale,
+            (arrowData.arrowParameters.tailThicknessPixels ?? 0) * scale
         );
 
         if (outlinePoints) {
@@ -734,6 +753,7 @@ const App: React.FC = () => {
         shaftThicknessPixels: currentShaftThicknessPixels,
         arrowHeadLengthPixels: currentArrowHeadLengthPixels,
         arrowHeadWidthPixels: currentArrowHeadWidthPixels,
+        tailThicknessPixels: currentTailThicknessPixels,
         baseZoom: currentParamsBaseZoom,
     };
     const currentNameVal = currentArrowName;
@@ -779,6 +799,7 @@ const App: React.FC = () => {
     setCurrentAnchors(copiedAnchors); 
     
     setCurrentShaftThicknessPixels(currentPixelParams.shaftThicknessPixels);
+    setCurrentTailThicknessPixels(currentPixelParams.tailThicknessPixels);
     setCurrentArrowHeadLengthPixels(currentPixelParams.arrowHeadLengthPixels);
     setCurrentArrowHeadWidthPixels(currentPixelParams.arrowHeadWidthPixels);
     setCurrentParamsBaseZoom(currentPixelParams.baseZoom);
@@ -836,13 +857,15 @@ const App: React.FC = () => {
     let sTP = params.shaftThicknessPixels ?? 0;
     let aHLP = params.arrowHeadLengthPixels ?? 0;
     let aHWP = params.arrowHeadWidthPixels ?? 0;
+    let tailP = params.tailThicknessPixels ?? 0;
 
     const scale = params.baseZoom !== null ? map.getZoomScale(map.getZoom(), params.baseZoom) : 1;
     sTP *= scale;
     aHLP *= scale;
     aHWP *= scale;
+    tailP *= scale;
 
-    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP, tailP);
     if (!outlinePoints) return null;
 
     try {
@@ -1169,6 +1192,8 @@ const App: React.FC = () => {
         canDeleteArrow={canDeleteArrow}
         shaftThicknessFactor={currentShaftThicknessFactor}
         onShaftThicknessChange={handleShaftThicknessChange}
+        tailThicknessFactor={currentTailThicknessFactor}
+        onTailThicknessChange={handleTailThicknessChange}
         arrowHeadLengthFactor={currentArrowHeadLengthFactor}
         onArrowHeadLengthChange={handleArrowHeadLengthChange}
         arrowHeadWidthFactor={currentArrowHeadWidthFactor}

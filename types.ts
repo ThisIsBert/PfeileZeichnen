@@ -48,6 +48,7 @@ export interface ArrowParameters {
   shaftThicknessPixels: number | null;
   arrowHeadLengthPixels: number | null;
   arrowHeadWidthPixels: number | null;
+  tailThicknessPixels: number | null;
   baseZoom: number | null;
 }
 

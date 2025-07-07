@@ -118,13 +118,15 @@ export function calculateArrowOutlinePoints(
     cumLengths: number[],
     shaftThicknessPx: number,
     arrowHeadLengthPx: number,
-    arrowHeadWidthPx: number
+    arrowHeadWidthPx: number,
+    tailThicknessPx: number
 ): Point[] | null { // Returns our Point type
     if (!pts || pts.length < 2 || totalLength <= 1e-6) { return null; }
 
     arrowHeadLengthPx = Math.min(arrowHeadLengthPx, totalLength);
     shaftThicknessPx = Math.max(0, shaftThicknessPx);
     arrowHeadWidthPx = Math.max(0, arrowHeadWidthPx);
+    tailThicknessPx = Math.max(0, tailThicknessPx);
 
     const tip = pts[pts.length - 1];
     const headBaseTargetCum = Math.max(0, totalLength - arrowHeadLengthPx);
@@ -159,27 +161,27 @@ export function calculateArrowOutlinePoints(
 
     const leftShaft: Point[] = [];
     const rightShaft: Point[] = [];
-    const shaftExists = headBaseTargetCum > 1e-6 && shaftThicknessPx > 1e-6;
+    const shaftExists = headBaseTargetCum > 1e-6 && (shaftThicknessPx > 1e-6 || tailThicknessPx > 1e-6);
 
     if (shaftExists) {
-        const shaftPts: Point[] = [];
+        const shaftPts: {pt: Point, len: number}[] = [];
         for (let i = 0; i < pts.length; i++) {
-            if (cumLengths[i] <= headBaseTargetCum + 1e-9) { 
-                if (shaftPts.length === 0 || pointLength(pointSubtract(pts[i], shaftPts[shaftPts.length - 1])) > 1e-6) {
-                    shaftPts.push(pts[i]);
+            if (cumLengths[i] <= headBaseTargetCum + 1e-9) {
+                if (shaftPts.length === 0 || pointLength(pointSubtract(pts[i], shaftPts[shaftPts.length - 1].pt)) > 1e-6) {
+                    shaftPts.push({pt: pts[i], len: cumLengths[i]});
                 }
             } else {
                 break;
             }
         }
         const shaftEndBasePt = interpolatePoint(pts, cumLengths, headBaseTargetCum);
-        if (shaftPts.length === 0 || pointLength(pointSubtract(shaftEndBasePt, shaftPts[shaftPts.length - 1])) > 1e-6) {
-           shaftPts.push(shaftEndBasePt);
+        if (shaftPts.length === 0 || pointLength(pointSubtract(shaftEndBasePt, shaftPts[shaftPts.length - 1].pt)) > 1e-6) {
+           shaftPts.push({pt: shaftEndBasePt, len: headBaseTargetCum});
         }
-        
+
         if (shaftPts.length >= 2) {
             for (let i = 0; i < shaftPts.length; i++) {
-                const p = shaftPts[i];
+                const {pt: p, len} = shaftPts[i];
                 let tangent: Point = { x: 1, y: 0 };
 
                 if (i === 0 && shaftPts.length > 1) {
@@ -209,8 +211,10 @@ export function calculateArrowOutlinePoints(
                 }
                 if (tangent.x === 0 && tangent.y === 0) tangent = { x: 1, y: 0 }; 
                 const perpT = normalize(perpendicular(tangent));
-                leftShaft.push(pointAdd(p, pointMultiply(perpT, shaftThicknessPx / 2)));
-                rightShaft.push(pointSubtract(p, pointMultiply(perpT, shaftThicknessPx / 2)));
+                const ratio = headBaseTargetCum > 1e-6 ? len / headBaseTargetCum : 1;
+                const widthHere = tailThicknessPx + (shaftThicknessPx - tailThicknessPx) * ratio;
+                leftShaft.push(pointAdd(p, pointMultiply(perpT, widthHere / 2)));
+                rightShaft.push(pointSubtract(p, pointMultiply(perpT, widthHere / 2)));
             }
         }
     }
