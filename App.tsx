@@ -4,9 +4,16 @@ import L from 'leaflet';
 import type { Anchor, AnchorData, ArrowGroup, ArrowParameters, EditingState as EditingStateType, GeoJsonFeature, GeoJsonFeatureCollection, LatLngLiteral, Point as GeomPoint, SavedArrowProperties } from './types';
 import { EditingState } from './types';
 import ControlPanel from './components/ControlPanel';
-import { 
-  DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, 
-  anchorIcon, handleIcon, HANDLE_OFFSET_ON_LINE_PIXELS, INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM
+import {
+  DEFAULT_SHAFT_THICKNESS_FACTOR,
+  DEFAULT_TAIL_THICKNESS_FACTOR,
+  DEFAULT_ARROW_HEAD_LENGTH_FACTOR,
+  DEFAULT_ARROW_HEAD_WIDTH_FACTOR,
+  anchorIcon,
+  handleIcon,
+  HANDLE_OFFSET_ON_LINE_PIXELS,
+  INITIAL_MAP_CENTER,
+  INITIAL_MAP_ZOOM
 } from './constants';
 import { 
   pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, 
