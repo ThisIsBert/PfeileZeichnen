@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { EditingState } from './types.js';
 import ControlPanel from './components/ControlPanel.js';
-import { DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, anchorIcon, handleIcon, HANDLE_OFFSET_ON_LINE_PIXELS, INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM } from './constants.js';
+import { DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_TAIL_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, anchorIcon, handleIcon, HANDLE_OFFSET_ON_LINE_PIXELS, INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM } from './constants.js';
 import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, calculateArrowOutlinePoints } from './utils/geometry.js';
 const App = () => {
     const mapContainerRef = useRef(null);
