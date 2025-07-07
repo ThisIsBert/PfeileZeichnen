@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { EditingState } from './types.js';
 import ControlPanel from './components/ControlPanel.js';
-import { DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, DEFAULT_TAIL_THICKNESS_FACTOR, anchorIcon, handleIcon, HANDLE_OFFSET_ON_LINE_PIXELS, INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM } from './constants.js';
+import { DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, anchorIcon, handleIcon, HANDLE_OFFSET_ON_LINE_PIXELS, INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM } from './constants.js';
 import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, calculateArrowOutlinePoints } from './utils/geometry.js';
 const App = () => {
     const mapContainerRef = useRef(null);
@@ -95,7 +95,6 @@ const App = () => {
             setCurrentTailThicknessFactor(DEFAULT_TAIL_THICKNESS_FACTOR);
         }
     }, [currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentTailThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
-
     const handleShaftThicknessChange = useCallback((factor) => {
         setCurrentShaftThicknessFactor(factor);
         if (mapRef.current && currentAnchors.length >= 2) {
@@ -103,7 +102,6 @@ const App = () => {
             setCurrentShaftThicknessPixels(totalLength > 1e-6 ? totalLength * factor : 0);
         }
     }, [getAnchorsData, currentAnchors.length]);
-
     const handleArrowHeadLengthChange = useCallback((factor) => {
         setCurrentArrowHeadLengthFactor(factor);
         if (mapRef.current && currentAnchors.length >= 2) {
@@ -111,7 +109,6 @@ const App = () => {
             setCurrentArrowHeadLengthPixels(totalLength > 1e-6 ? totalLength * factor : 0);
         }
     }, [getAnchorsData, currentAnchors.length]);
-
     const handleArrowHeadWidthChange = useCallback((factor) => {
         setCurrentArrowHeadWidthFactor(factor);
         if (mapRef.current && currentAnchors.length >= 2) {
@@ -119,7 +116,6 @@ const App = () => {
             setCurrentArrowHeadWidthPixels(totalLength > 1e-6 ? totalLength * factor : 0);
         }
     }, [getAnchorsData, currentAnchors.length]);
-
     const handleTailThicknessChange = useCallback((factor) => {
         setCurrentTailThicknessFactor(factor);
         if (mapRef.current && currentAnchors.length >= 2) {
@@ -521,14 +517,13 @@ const App = () => {
         let sThicknessPx = currentShaftThicknessPixels ?? 0;
         let ahLengthPx = currentArrowHeadLengthPixels ?? 0;
         let ahWidthPx = currentArrowHeadWidthPixels ?? 0;
-
         const baseZoom = currentParamsBaseZoom ?? map.getZoom();
         const finalArrowParams = {
             shaftThicknessPixels: sThicknessPx,
             arrowHeadLengthPixels: ahLengthPx,
             arrowHeadWidthPixels: ahWidthPx,
             tailThicknessPixels: currentTailThicknessPixels ?? 0,
-            baseZoom
+            baseZoom,
         };
         const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, getAnchorsData());
         if (pts.length < 2) {
@@ -598,9 +593,9 @@ const App = () => {
         setCurrentAnchors(loadedAnchors);
         setCurrentArrowName(arrowGroupToSelect.arrowName);
         setCurrentShaftThicknessPixels(arrowGroupToSelect.arrowParameters.shaftThicknessPixels);
+        setCurrentTailThicknessPixels(arrowGroupToSelect.arrowParameters.tailThicknessPixels);
         setCurrentArrowHeadLengthPixels(arrowGroupToSelect.arrowParameters.arrowHeadLengthPixels);
         setCurrentArrowHeadWidthPixels(arrowGroupToSelect.arrowParameters.arrowHeadWidthPixels);
-        setCurrentTailThicknessPixels(arrowGroupToSelect.arrowParameters.tailThicknessPixels);
         setCurrentParamsBaseZoom(arrowGroupToSelect.arrowParameters.baseZoom);
     }, [
         editingState, saveStateForCancel, finalizeCurrentArrow
@@ -622,7 +617,8 @@ const App = () => {
             const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsDataForGeom);
             if (pts.length < 2 || arrowData.arrowParameters.shaftThicknessPixels === null || arrowData.arrowParameters.arrowHeadLengthPixels === null || arrowData.arrowParameters.arrowHeadWidthPixels === null)
                 return;
-            const scale = arrowData.arrowParameters.baseZoom !== null ? map.getZoomScale(map.getZoom(), arrowData.arrowParameters.baseZoom) : 1;
+            const scale = arrowData.arrowParameters.baseZoom !== null ?
+                map.getZoomScale(map.getZoom(), arrowData.arrowParameters.baseZoom) : 1;
             const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, (arrowData.arrowParameters.shaftThicknessPixels ?? 0) * scale, (arrowData.arrowParameters.arrowHeadLengthPixels ?? 0) * scale, (arrowData.arrowParameters.arrowHeadWidthPixels ?? 0) * scale, (arrowData.arrowParameters.tailThicknessPixels ?? 0) * scale);
             if (outlinePoints) {
                 const restoredGroup = L.layerGroup();
@@ -772,8 +768,6 @@ const App = () => {
             setCurrentArrowName('');
         }
     }, [editingState, selectedArrowGroup, resetCurrentPixelValues, savedArrowsBackup]);
-    const handleSliderChange = useCallback((value, type) => {
-    }, []);
     const generateGeoJsonForArrow = useCallback((anchorsData, params, name) => {
         const map = mapRef.current;
         if (!map || anchorsData.length < 2)
@@ -785,14 +779,12 @@ const App = () => {
         let aHLP = params.arrowHeadLengthPixels ?? 0;
         let aHWP = params.arrowHeadWidthPixels ?? 0;
         let tailP = params.tailThicknessPixels ?? 0;
-
         const scale = params.baseZoom !== null ? map.getZoomScale(map.getZoom(), params.baseZoom) : 1;
         sTP *= scale;
         aHLP *= scale;
         aHWP *= scale;
         tailP *= scale;
         const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP, tailP);
-
         if (!outlinePoints)
             return null;
         try {
@@ -828,7 +820,8 @@ const App = () => {
         let sThicknessPx = currentShaftThicknessPixels;
         let ahLengthPx = currentArrowHeadLengthPixels;
         let ahWidthPx = currentArrowHeadWidthPixels;
-        if (sThicknessPx === null || ahLengthPx === null || ahWidthPx === null) {
+        const map = mapRef.current;
+        if ((sThicknessPx === null || ahLengthPx === null || ahWidthPx === null)) {
             sThicknessPx = sThicknessPx ?? 0;
             ahLengthPx = ahLengthPx ?? 0;
             ahWidthPx = ahWidthPx ?? 0;
@@ -837,7 +830,7 @@ const App = () => {
             shaftThicknessPixels: sThicknessPx,
             arrowHeadLengthPixels: ahLengthPx,
             arrowHeadWidthPixels: ahWidthPx,
-            baseZoom: currentParamsBaseZoom ?? (mapRef.current ? mapRef.current.getZoom() : 0)
+            baseZoom: currentParamsBaseZoom ?? map?.getZoom() ?? 0
         }, currentArrowName);
         if (feature) {
             const jsonString = JSON.stringify(feature, null, 2);
@@ -924,23 +917,21 @@ const App = () => {
         }
         return () => { map.off('click', onMapClickHandler); };
     }, [editingState, currentAnchors.length, addAnchor]);
-   useEffect(() => {
-       if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
-           updateCurveAndArrowPreview();
-       }
-       else {
-           drawingLayerRef.current?.eachLayer(layer => {
-               if (layer.options?.isPreviewLine)
-                   drawingLayerRef.current?.removeLayer(layer);
-           });
-           editingArrowLayerRef.current?.clearLayers();
-       }
+    useEffect(() => {
+        if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
+            updateCurveAndArrowPreview();
+        }
+        else {
+            drawingLayerRef.current?.eachLayer(layer => {
+                if (layer.options?.isPreviewLine)
+                    drawingLayerRef.current?.removeLayer(layer);
+            });
+            editingArrowLayerRef.current?.clearLayers();
+        }
     }, [currentAnchors, currentShaftThicknessFactor, currentTailThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentTailThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
-
     useEffect(() => {
         updateFactorsFromPixelValues();
     }, [currentShaftThicknessPixels, currentTailThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
-
     // Effect for managing anchor/handle markers and connector lines
     useEffect(() => {
         const map = mapRef.current;
