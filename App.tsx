@@ -376,14 +376,17 @@ const App: React.FC = () => {
     let sThicknessPx = currentShaftThicknessPixels;
     let ahLengthPx = currentArrowHeadLengthPixels;
     let ahWidthPx = currentArrowHeadWidthPixels;
+    let tailThicknessPx = currentTailThicknessPixels;
 
-    if (sThicknessPx === null || ahLengthPx === null || ahWidthPx === null) {
+    if (sThicknessPx === null || ahLengthPx === null || ahWidthPx === null || tailThicknessPx === null) {
         sThicknessPx = totalLength * currentShaftThicknessFactor;
         ahLengthPx = totalLength * currentArrowHeadLengthFactor;
         ahWidthPx = totalLength * currentArrowHeadWidthFactor;
+        tailThicknessPx = totalLength * currentTailThicknessFactor;
         setCurrentShaftThicknessPixels(sThicknessPx);
         setCurrentArrowHeadLengthPixels(ahLengthPx);
         setCurrentArrowHeadWidthPixels(ahWidthPx);
+        setCurrentTailThicknessPixels(tailThicknessPx);
         if (currentParamsBaseZoom === null) setCurrentParamsBaseZoom(map.getZoom());
     }
 
@@ -392,8 +395,9 @@ const App: React.FC = () => {
     ahLengthPx = Math.min(ahLengthPx * scale, totalLength);
     sThicknessPx = Math.max(0, sThicknessPx * scale);
     ahWidthPx = Math.max(0, ahWidthPx * scale);
+    tailThicknessPx = Math.max(0, tailThicknessPx * scale);
 
-    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx, currentTailThicknessPixels !== null ? currentTailThicknessPixels * scale : totalLength * currentTailThicknessFactor * scale);
+    const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sThicknessPx, ahLengthPx, ahWidthPx, tailThicknessPx);
 
     if (outlinePoints) {
       try {
@@ -1029,11 +1033,11 @@ const App: React.FC = () => {
         });
         editingArrowLayerRef.current?.clearLayers();
     }
-  }, [currentAnchors, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
+  }, [currentAnchors, currentShaftThicknessFactor, currentTailThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentShaftThicknessPixels, currentTailThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, editingState, updateCurveAndArrowPreview]);
 
   useEffect(() => {
     updateFactorsFromPixelValues();
-  }, [currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
+  }, [currentShaftThicknessPixels, currentTailThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentParamsBaseZoom]);
 
 
   // Effect for managing anchor/handle markers and connector lines
