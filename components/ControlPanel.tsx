@@ -16,6 +16,8 @@ interface ControlPanelProps {
   onArrowHeadLengthChange: (factor: number) => void;
   arrowHeadWidthFactor: number;
   onArrowHeadWidthChange: (factor: number) => void;
+  tailThicknessFactor: number;
+  onTailThicknessChange: (factor: number) => void;
   canEditParameters: boolean;
 
   arrowName: string;
@@ -44,6 +46,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onArrowHeadLengthChange,
   arrowHeadWidthFactor,
   onArrowHeadWidthChange,
+  tailThicknessFactor,
+  onTailThicknessChange,
   canEditParameters,
   arrowName,
   onArrowNameChange,
@@ -110,6 +114,23 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           step="0.005"
           value={shaftThicknessFactor}
           onChange={(e) => onShaftThicknessChange(parseFloat(e.target.value))}
+          disabled={!canEditParameters}
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="tailThicknessSlider" className="block text-sm font-medium text-gray-700 mb-1">
+          Hintere Breite: {tailThicknessFactor.toFixed(3)}
+        </label>
+        <input
+          type="range"
+          id="tailThicknessSlider"
+          min="0.005"
+          max="0.1"
+          step="0.005"
+          value={tailThicknessFactor}
+          onChange={(e) => onTailThicknessChange(parseFloat(e.target.value))}
           disabled={!canEditParameters}
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         />
