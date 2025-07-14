@@ -106,13 +106,14 @@ export function getValidPointsAndLength(map, anchorArray) {
     return { pts, totalLength, cumLengths, validCurveData };
 }
 export function calculateArrowOutlinePoints(pts, // These are our Point type
-totalLength, cumLengths, shaftThicknessPx, arrowHeadLengthPx, arrowHeadWidthPx) {
+totalLength, cumLengths, shaftThicknessPx, arrowHeadLengthPx, arrowHeadWidthPx, tailThicknessPx = shaftThicknessPx) {
     if (!pts || pts.length < 2 || totalLength <= 1e-6) {
         return null;
     }
     arrowHeadLengthPx = Math.min(arrowHeadLengthPx, totalLength);
     shaftThicknessPx = Math.max(0, shaftThicknessPx);
     arrowHeadWidthPx = Math.max(0, arrowHeadWidthPx);
+    tailThicknessPx = Math.max(0, tailThicknessPx);
     const tip = pts[pts.length - 1];
     const headBaseTargetCum = Math.max(0, totalLength - arrowHeadLengthPx);
     let basePt = interpolatePoint(pts, cumLengths, headBaseTargetCum);
@@ -151,13 +152,15 @@ totalLength, cumLengths, shaftThicknessPx, arrowHeadLengthPx, arrowHeadWidthPx) 
     }
     const leftShaft = [];
     const rightShaft = [];
-    const shaftExists = headBaseTargetCum > 1e-6 && shaftThicknessPx > 1e-6;
+    const shaftExists = headBaseTargetCum > 1e-6 && (shaftThicknessPx > 1e-6 || tailThicknessPx > 1e-6);
     if (shaftExists) {
         const shaftPts = [];
+        const shaftCum = [];
         for (let i = 0; i < pts.length; i++) {
             if (cumLengths[i] <= headBaseTargetCum + 1e-9) {
                 if (shaftPts.length === 0 || pointLength(pointSubtract(pts[i], shaftPts[shaftPts.length - 1])) > 1e-6) {
                     shaftPts.push(pts[i]);
+                    shaftCum.push(cumLengths[i]);
                 }
             }
             else {
@@ -167,6 +170,7 @@ totalLength, cumLengths, shaftThicknessPx, arrowHeadLengthPx, arrowHeadWidthPx) 
         const shaftEndBasePt = interpolatePoint(pts, cumLengths, headBaseTargetCum);
         if (shaftPts.length === 0 || pointLength(pointSubtract(shaftEndBasePt, shaftPts[shaftPts.length - 1])) > 1e-6) {
             shaftPts.push(shaftEndBasePt);
+            shaftCum.push(headBaseTargetCum);
         }
         if (shaftPts.length >= 2) {
             for (let i = 0; i < shaftPts.length; i++) {
@@ -209,8 +213,10 @@ totalLength, cumLengths, shaftThicknessPx, arrowHeadLengthPx, arrowHeadWidthPx) 
                 if (tangent.x === 0 && tangent.y === 0)
                     tangent = { x: 1, y: 0 };
                 const perpT = normalize(perpendicular(tangent));
-                leftShaft.push(pointAdd(p, pointMultiply(perpT, shaftThicknessPx / 2)));
-                rightShaft.push(pointSubtract(p, pointMultiply(perpT, shaftThicknessPx / 2)));
+                const tRatio = shaftCum[i] / Math.max(headBaseTargetCum, 1e-9);
+                const thickness = tailThicknessPx + (shaftThicknessPx - tailThicknessPx) * tRatio;
+                leftShaft.push(pointAdd(p, pointMultiply(perpT, thickness / 2)));
+                rightShaft.push(pointSubtract(p, pointMultiply(perpT, thickness / 2)));
             }
         }
     }

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { EditingState } from './types.js';
 import ControlPanel from './components/ControlPanel.js';
-import { DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, anchorIcon, handleIcon, HANDLE_OFFSET_ON_LINE_PIXELS, INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM } from './constants.js';
+import { DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, DEFAULT_TAIL_THICKNESS_FACTOR, anchorIcon, handleIcon, HANDLE_OFFSET_ON_LINE_PIXELS, INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM } from './constants.js';
 import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, calculateArrowOutlinePoints } from './utils/geometry.js';
 const App = () => {
     const mapContainerRef = useRef(null);
@@ -17,9 +17,11 @@ const App = () => {
     const [currentShaftThicknessFactor, setCurrentShaftThicknessFactor] = useState(DEFAULT_SHAFT_THICKNESS_FACTOR);
     const [currentArrowHeadLengthFactor, setCurrentArrowHeadLengthFactor] = useState(DEFAULT_ARROW_HEAD_LENGTH_FACTOR);
     const [currentArrowHeadWidthFactor, setCurrentArrowHeadWidthFactor] = useState(DEFAULT_ARROW_HEAD_WIDTH_FACTOR);
+    const [currentTailThicknessFactor, setCurrentTailThicknessFactor] = useState(DEFAULT_TAIL_THICKNESS_FACTOR);
     const [currentShaftThicknessPixels, setCurrentShaftThicknessPixels] = useState(null);
     const [currentArrowHeadLengthPixels, setCurrentArrowHeadLengthPixels] = useState(null);
     const [currentArrowHeadWidthPixels, setCurrentArrowHeadWidthPixels] = useState(null);
+    const [currentTailThicknessPixels, setCurrentTailThicknessPixels] = useState(null);
     const [currentParamsBaseZoom, setCurrentParamsBaseZoom] = useState(null);
     const [currentArrowName, setCurrentArrowName] = useState('');
     const [arrowNameCounter, setArrowNameCounter] = useState(1);
@@ -1077,6 +1079,6 @@ const App = () => {
     const canDeleteArrow = editingState === EditingState.EditingSelected && selectedArrowGroup !== null;
     const canCopyGeoJsonCurrent = canEditParameters;
     const canSaveAllGeoJsonExport = editingState === EditingState.Idle && (arrowLayerRef.current?.getLayers().length ?? 0) > 0;
-    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { editingState: editingState, onDrawArrow: handleDrawArrow, onCopyArrow: handleCopyArrow, canCopyArrow: canCopyCurrentArrow, onDeleteArrow: handleDeleteSelectedArrow, canDeleteArrow: canDeleteArrow, shaftThicknessFactor: currentShaftThicknessFactor, onShaftThicknessChange: handleShaftThicknessChange, arrowHeadLengthFactor: currentArrowHeadLengthFactor, onArrowHeadLengthChange: handleArrowHeadLengthChange, arrowHeadWidthFactor: currentArrowHeadWidthFactor, onArrowHeadWidthChange: handleArrowHeadWidthChange, canEditParameters: canEditParameters, arrowName: currentArrowName, onArrowNameChange: setCurrentArrowName, canEditName: editingState !== EditingState.Idle, onCopyGeoJson: handleCopyGeoJson, canCopyGeoJson: canCopyGeoJsonCurrent, onSaveAllGeoJson: handleSaveAllGeoJson, canSaveAllGeoJson: canSaveAllGeoJsonExport, onConfirm: () => handleConfirm(true), onCancel: handleCancel })] }));
+    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { editingState: editingState, onDrawArrow: handleDrawArrow, onCopyArrow: handleCopyArrow, canCopyArrow: canCopyCurrentArrow, onDeleteArrow: handleDeleteSelectedArrow, canDeleteArrow: canDeleteArrow, shaftThicknessFactor: currentShaftThicknessFactor, onShaftThicknessChange: handleShaftThicknessChange, arrowHeadLengthFactor: currentArrowHeadLengthFactor, onArrowHeadLengthChange: handleArrowHeadLengthChange, arrowHeadWidthFactor: currentArrowHeadWidthFactor, onArrowHeadWidthChange: handleArrowHeadWidthChange, tailThicknessFactor: currentTailThicknessFactor, onTailThicknessChange: handleTailThicknessChange, canEditParameters: canEditParameters, arrowName: currentArrowName, onArrowNameChange: setCurrentArrowName, canEditName: editingState !== EditingState.Idle, onCopyGeoJson: handleCopyGeoJson, canCopyGeoJson: canCopyGeoJsonCurrent, onSaveAllGeoJson: handleSaveAllGeoJson, canSaveAllGeoJson: canSaveAllGeoJsonExport, onConfirm: () => handleConfirm(true), onCancel: handleCancel })] }));
 };
 export default App;
