@@ -1200,6 +1200,8 @@ const App: React.FC = () => {
         onArrowHeadLengthChange={handleArrowHeadLengthChange}
         arrowHeadWidthFactor={currentArrowHeadWidthFactor}
         onArrowHeadWidthChange={handleArrowHeadWidthChange}
+        tailThicknessFactor={currentTailThicknessFactor}
+        onTailThicknessChange={handleTailThicknessChange}
         canEditParameters={canEditParameters}
         arrowName={currentArrowName}
         onArrowNameChange={setCurrentArrowName}
