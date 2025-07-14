@@ -1,17 +1,19 @@
 # Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
+This project is maintained entirely in plain JavaScript. The compiled `.js` files
+are committed to the repository so there is no build step required when
+deploying.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js
 
-
-1. Install dependencies (optional for development only):
-   `npm install`
+1. Install dependencies (optional for development only): `npm install`
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app locally:
-   `npm run dev`
+3. Run the app locally (using Vite): `npm run dev`
+
+Using Vite or another tool for local development is optional. Deployment only
+requires serving the files in this repository as-is.
 
 ## GitHub Pages
 
