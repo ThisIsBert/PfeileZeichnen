@@ -5,18 +5,7 @@ import { resolve } from 'path';
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: '.',
-    emptyOutDir: false,
-    rollupOptions: {
-      input: {
-        index: resolve(__dirname, 'src/index.jsx'),
-      },
-      output: {
-        entryFileNames: 'index.js',
-        format: 'es',
-        preserveModules: true,
-        preserveModulesRoot: 'src',
-      },
-    },
+    outDir: 'dist',
+    emptyOutDir: true,
   },
 });
