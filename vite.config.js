@@ -7,16 +7,5 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        index: resolve(__dirname, 'src/index.jsx'),
-      },
-      output: {
-        entryFileNames: 'index.js',
-        format: 'es',
-        preserveModules: true,
-        preserveModulesRoot: 'src',
-      },
-    },
   },
 });
