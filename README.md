@@ -11,6 +11,18 @@ The runtime entrypoint is:
 
 No bundling or build step is required.
 
+## Deployment
+
+Push static files directly to the default branch / Pages root. There is no compile phase.
+
+## Static checks
+
+Run static checks locally:
+
+- `npm run lint`
+- `npm run format:check`
+- `npm run validate:imports`
+
 ## Editing path (exactly one)
 
 Edit the root-level source files directly:
