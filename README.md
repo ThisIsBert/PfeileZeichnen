@@ -1,22 +1,26 @@
-# Run and deploy your AI Studio app
+# Leaflet Arrow Drawing Tool
 
-Source files now live under `src/` and are compiled using Vite. The generated
-JavaScript in the repository root can still be served directly on GitHub Pages.
+This repository is a **no-build static web app**.
 
-## Run Locally
+## Runtime path (exactly one)
 
-**Prerequisites:** Node.js
+Serve the repository root on any static host (for example GitHub Pages).
+The runtime entrypoint is:
 
-1. Install dependencies: `npm install`
-2. Build the compiled files: `npm run build`
-3. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-4. Run the app locally (using Vite): `npm run dev`
+- `index.html` (which loads `index.js` as an ES module)
 
-Using Vite or another tool for local development is optional. Deployment only
-requires serving the files in this repository as-is.
+No bundling or build step is required.
 
-## GitHub Pages
+## Editing path (exactly one)
 
-The compiled JavaScript files are checked in so the app can be hosted directly
-from the repository root. After editing the sources run `npm run build` and
-commit the updated files before pushing to GitHub Pages.
+Edit the root-level source files directly:
+
+- `index.html`
+- `index.js`
+- `App.js`
+- `components/ControlPanel.js`
+- `constants.js`
+- `types.js`
+- `utils/geometry.js`
+
+After editing, commit those files and deploy by serving the repository root.
