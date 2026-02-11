@@ -3,8 +3,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { EditingState } from './types.js';
 import ControlPanel from './components/ControlPanel.js';
-import { DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, anchorIcon, handleIcon, HANDLE_OFFSET_ON_LINE_PIXELS, INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM } from './constants.js';
-import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, calculateArrowOutlinePoints } from './utils/geometry.js';
+import { DEFAULT_SHAFT_THICKNESS_FACTOR, DEFAULT_ARROW_HEAD_LENGTH_FACTOR, DEFAULT_ARROW_HEAD_WIDTH_FACTOR, anchorIcon, handleIcon } from './constants.js';
+import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, calculateArrowOutlinePoints } from './app/geometry/index.js';
+import { setupLeafletMap, teardownLeafletMap } from './app/map/lifecycle.js';
+import { insertAnchorWithAlignedHandles } from './app/map/interactions/handleUpdates.js';
+import { findClosestCurveSegmentIndex } from './app/map/interactions/click.js';
+import { getContainerPoint, getInitialLayerPoints, translateAnchorsByDelta } from './app/map/interactions/drag.js';
+import { generateGeoJsonForArrow } from './app/io/exportGeoJson.js';
+import { canDeleteArrow as getCanDeleteArrow, canEditParameters as getCanEditParameters, canSaveAllGeoJson as getCanSaveAllGeoJson, isEditing } from './app/state/editingState.js';
+import { fromArrowAnchorData, toArrowAnchorData } from './app/adapters/leafletArrowAdapter.js';
+import './app/types/arrow.js';
 const App = () => {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
@@ -37,13 +45,7 @@ const App = () => {
     const handle2MarkersRef = useRef(new Map());
     const connector1LinesRef = useRef(new Map());
     const connector2LinesRef = useRef(new Map());
-    const getAnchorsData = useCallback(() => {
-        return currentAnchors.map(a => ({
-            latlng: a.latlng,
-            handle1: a.handle1 || null,
-            handle2: a.handle2 || null,
-        }));
-    }, [currentAnchors]);
+    const getAnchorsData = useCallback(() => toArrowAnchorData(currentAnchors), [currentAnchors]);
     const updatePixelValuesFromFactors = useCallback(() => {
         if (!mapRef.current || currentAnchors.length < 2) {
             setCurrentShaftThicknessPixels(null);
@@ -123,57 +125,7 @@ const App = () => {
             return;
         const newAnchorId = Date.now().toString() + Math.random().toString();
         const newAnchorLatLng = L.latLng(latlng.lat, latlng.lng);
-        const newAnchorData = {
-            id: newAnchorId,
-            latlng: { lat: newAnchorLatLng.lat, lng: newAnchorLatLng.lng },
-            handle1: { lat: newAnchorLatLng.lat, lng: newAnchorLatLng.lng },
-            handle2: { lat: newAnchorLatLng.lat, lng: newAnchorLatLng.lng },
-        };
-        setCurrentAnchors(prevAnchors => {
-            const updatedAnchors = [...prevAnchors];
-            updatedAnchors.splice(index, 0, newAnchorData);
-            if (index > 0) {
-                const prevAnchor = updatedAnchors[index - 1];
-                try {
-                    const p_prev = map.latLngToLayerPoint(L.latLng(prevAnchor.latlng.lat, prevAnchor.latlng.lng));
-                    const p_new = map.latLngToLayerPoint(newAnchorLatLng);
-                    const vec = pointSubtract(p_new, p_prev);
-                    const len = pointLength(vec);
-                    if (len > 1e-6) {
-                        const unitVec = pointMultiply(vec, 1 / len);
-                        const offsetVec = pointMultiply(unitVec, HANDLE_OFFSET_ON_LINE_PIXELS);
-                        const prevAnchorH2Pos = pointAdd(p_prev, offsetVec);
-                        prevAnchor.handle2 = map.layerPointToLatLng(L.point(prevAnchorH2Pos.x, prevAnchorH2Pos.y)).wrap();
-                        const newAnchorH1Pos = pointSubtract(p_new, offsetVec);
-                        updatedAnchors[index].handle1 = map.layerPointToLatLng(L.point(newAnchorH1Pos.x, newAnchorH1Pos.y)).wrap();
-                    }
-                }
-                catch (e) {
-                    console.error("Error aligning previous segment handles:", e);
-                }
-            }
-            if (index < updatedAnchors.length - 1) {
-                const nextAnchor = updatedAnchors[index + 1];
-                try {
-                    const p_new = map.latLngToLayerPoint(newAnchorLatLng);
-                    const p_next = map.latLngToLayerPoint(L.latLng(nextAnchor.latlng.lat, nextAnchor.latlng.lng));
-                    const vec = pointSubtract(p_next, p_new);
-                    const len = pointLength(vec);
-                    if (len > 1e-6) {
-                        const unitVec = pointMultiply(vec, 1 / len);
-                        const offsetVec = pointMultiply(unitVec, HANDLE_OFFSET_ON_LINE_PIXELS);
-                        const newAnchorH2Pos = pointAdd(p_new, offsetVec);
-                        updatedAnchors[index].handle2 = map.layerPointToLatLng(L.point(newAnchorH2Pos.x, newAnchorH2Pos.y)).wrap();
-                        const nextAnchorH1Pos = pointSubtract(p_next, offsetVec);
-                        nextAnchor.handle1 = map.layerPointToLatLng(L.point(nextAnchorH1Pos.x, nextAnchorH1Pos.y)).wrap();
-                    }
-                }
-                catch (e) {
-                    console.error("Error aligning next segment handles:", e);
-                }
-            }
-            return updatedAnchors;
-        });
+        setCurrentAnchors(prevAnchors => insertAnchorWithAlignedHandles(map, prevAnchors, newAnchorLatLng, index, newAnchorId));
         const newCount = currentAnchors.length + 1;
         if (newCount <= 2) {
             resetCurrentPixelValues();
@@ -192,33 +144,9 @@ const App = () => {
         const map = mapRef.current;
         if (!isArrowDraggingRef.current || !map || !arrowDragStartPointRef.current)
             return;
-        const currentMousePoint = map.mouseEventToContainerPoint(e.originalEvent);
-        const currentGeomPoint = { x: currentMousePoint.x, y: currentMousePoint.y };
+        const currentGeomPoint = getContainerPoint(map, e.originalEvent);
         const delta = pointSubtract(currentGeomPoint, arrowDragStartPointRef.current);
-        setCurrentAnchors(prevAnchors => prevAnchors.map((anchor, i) => {
-            const newAnchorPart = {};
-            try {
-                if (initialAnchorLayerPointsRef.current[i]) {
-                    const initialPt = initialAnchorLayerPointsRef.current[i];
-                    const newAnchorGeomPoint = pointAdd(initialPt, delta);
-                    newAnchorPart.latlng = map.layerPointToLatLng(L.point(newAnchorGeomPoint.x, newAnchorGeomPoint.y)).wrap();
-                }
-                if (anchor.handle1 && initialHandle1LayerPointsRef.current[i]) {
-                    const initialH1Pt = initialHandle1LayerPointsRef.current[i];
-                    const newHandle1GeomPoint = pointAdd(initialH1Pt, delta);
-                    newAnchorPart.handle1 = map.layerPointToLatLng(L.point(newHandle1GeomPoint.x, newHandle1GeomPoint.y)).wrap();
-                }
-                if (anchor.handle2 && initialHandle2LayerPointsRef.current[i]) {
-                    const initialH2Pt = initialHandle2LayerPointsRef.current[i];
-                    const newHandle2GeomPoint = pointAdd(initialH2Pt, delta);
-                    newAnchorPart.handle2 = map.layerPointToLatLng(L.point(newHandle2GeomPoint.x, newHandle2GeomPoint.y)).wrap();
-                }
-            }
-            catch (error) {
-                console.error("Arrow drag update error:", error);
-            }
-            return { ...anchor, ...newAnchorPart };
-        }));
+        setCurrentAnchors(prevAnchors => translateAnchorsByDelta(map, prevAnchors, delta, initialAnchorLayerPointsRef.current, initialHandle1LayerPointsRef.current, initialHandle2LayerPointsRef.current));
     }, []);
     const stopArrowDrag = useCallback(() => {
         const map = mapRef.current;
@@ -238,11 +166,11 @@ const App = () => {
         L.DomEvent.stopPropagation(e.originalEvent);
         L.DomEvent.preventDefault(e.originalEvent);
         isArrowDraggingRef.current = true;
-        const startMousePoint = map.mouseEventToContainerPoint(e.originalEvent);
-        arrowDragStartPointRef.current = { x: startMousePoint.x, y: startMousePoint.y };
-        initialAnchorLayerPointsRef.current = currentAnchors.map(a => a.latlng ? map.latLngToLayerPoint(L.latLng(a.latlng.lat, a.latlng.lng)) : null);
-        initialHandle1LayerPointsRef.current = currentAnchors.map(a => a.handle1 ? map.latLngToLayerPoint(L.latLng(a.handle1.lat, a.handle1.lng)) : null);
-        initialHandle2LayerPointsRef.current = currentAnchors.map(a => a.handle2 ? map.latLngToLayerPoint(L.latLng(a.handle2.lat, a.handle2.lng)) : null);
+        arrowDragStartPointRef.current = getContainerPoint(map, e.originalEvent);
+        const initialLayerPoints = getInitialLayerPoints(map, currentAnchors);
+        initialAnchorLayerPointsRef.current = initialLayerPoints.anchor;
+        initialHandle1LayerPointsRef.current = initialLayerPoints.handle1;
+        initialHandle2LayerPointsRef.current = initialLayerPoints.handle2;
         map.dragging.disable();
         map.on('mousemove', onArrowDrag);
         map.on('mouseup', stopArrowDrag);
@@ -250,31 +178,14 @@ const App = () => {
     }, [currentAnchors, editingState, onArrowDrag, stopArrowDrag]);
     const handleCurveClick = useCallback((e) => {
         const map = mapRef.current;
-        if (!map || isArrowDraggingRef.current || (editingState !== EditingState.DrawingNew && editingState !== EditingState.EditingSelected))
+        if (!map || isArrowDraggingRef.current || !isEditing(editingState))
             return;
-        const clickLatLng = e.latlng;
-        const clickPtLPoint = map.latLngToLayerPoint(clickLatLng);
-        const clickPt = { x: clickPtLPoint.x, y: clickPtLPoint.y };
-        const { validCurveData } = getValidPointsAndLength(map, getAnchorsData());
-        if (!validCurveData || validCurveData.length === 0)
-            return;
-        let minDistSq = Infinity;
-        let closestSegIndex = -1;
-        validCurveData.forEach(d => {
-            const pt = d.pt;
-            const dx = pt.x - clickPt.x;
-            const dy = pt.y - clickPt.y;
-            const distSq = dx * dx + dy * dy;
-            if (distSq < minDistSq) {
-                minDistSq = distSq;
-                closestSegIndex = d.segIndex;
-            }
-        });
+        const closestSegIndex = findClosestCurveSegmentIndex(map, e.latlng, getAnchorsData());
         if (closestSegIndex !== -1) {
-            addAnchor(clickLatLng, closestSegIndex + 1);
+            addAnchor(e.latlng, closestSegIndex + 1);
         }
         else {
-            console.warn("Could not find closest point on curve for click:", clickLatLng);
+            console.warn("Could not find closest point on curve for click:", e.latlng);
         }
     }, [editingState, addAnchor, getAnchorsData]);
     const updateCurveAndArrowPreview = useCallback(() => {
@@ -567,12 +478,7 @@ const App = () => {
         setEditingState(EditingState.EditingSelected);
         arrowLayerRef.current?.removeLayer(arrowGroupToSelect);
         setSelectedArrowGroup(arrowGroupToSelect);
-        const loadedAnchors = arrowGroupToSelect.savedAnchors.map((sa, idx) => ({
-            id: Date.now().toString() + Math.random().toString() + `_load_${idx}`,
-            latlng: sa.latlng,
-            handle1: sa.handle1 || null,
-            handle2: sa.handle2 || null,
-        }));
+        const loadedAnchors = fromArrowAnchorData(arrowGroupToSelect.savedAnchors, '_load');
         setCurrentAnchors(loadedAnchors);
         setCurrentArrowName(arrowGroupToSelect.arrowName);
         setCurrentShaftThicknessPixels(arrowGroupToSelect.arrowParameters.shaftThicknessPixels);
@@ -749,51 +655,11 @@ const App = () => {
     }, [editingState, selectedArrowGroup, resetCurrentPixelValues, savedArrowsBackup]);
     const handleSliderChange = useCallback((value, type) => {
     }, []);
-    const generateGeoJsonForArrow = useCallback((anchorsData, params, name) => {
+    const generateGeoJsonForArrowForMap = useCallback((anchorsData, params, name) => {
         const map = mapRef.current;
-        if (!map || anchorsData.length < 2)
+        if (!map)
             return null;
-        const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsData);
-        if (pts.length < 2)
-            return null;
-        let sTP = params.shaftThicknessPixels ?? 0;
-        let aHLP = params.arrowHeadLengthPixels ?? 0;
-        let aHWP = params.arrowHeadWidthPixels ?? 0;
-
-        const scale = params.baseZoom !== null ? map.getZoomScale(map.getZoom(), params.baseZoom) : 1;
-        sTP *= scale;
-        aHLP *= scale;
-        aHWP *= scale;
-        const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
-
-        if (!outlinePoints)
-            return null;
-        try {
-            const coordinates = [outlinePoints.map(p => {
-                    const latLng = map.layerPointToLatLng(L.point(p.x, p.y)).wrap();
-                    return [latLng.lng, latLng.lat];
-                })];
-            if (coordinates[0].length > 0) {
-                const first = coordinates[0][0];
-                const last = coordinates[0][coordinates[0].length - 1];
-                if (first[0] !== last[0] || first[1] !== last[1]) {
-                    coordinates[0].push([...first]);
-                }
-            }
-            if (coordinates[0].length < 4) {
-                console.error("GeoJSON generation: Not enough points for polygon.", coordinates[0]);
-                return null;
-            }
-            return {
-                type: "Feature",
-                properties: { name },
-                geometry: { type: "Polygon", coordinates },
-            };
-        }
-        catch (error) {
-            console.error("Error converting points to GeoJSON:", error);
-            return null;
-        }
+        return generateGeoJsonForArrow(map, anchorsData, params, name);
     }, []);
     const handleCopyGeoJson = useCallback(() => {
         if (editingState === EditingState.Idle || currentAnchors.length < 2)
@@ -806,7 +672,7 @@ const App = () => {
             ahLengthPx = ahLengthPx ?? 0;
             ahWidthPx = ahWidthPx ?? 0;
         }
-        const feature = generateGeoJsonForArrow(getAnchorsData(), {
+        const feature = generateGeoJsonForArrowForMap(getAnchorsData(), {
             shaftThicknessPixels: sThicknessPx,
             arrowHeadLengthPixels: ahLengthPx,
             arrowHeadWidthPixels: ahWidthPx,
@@ -824,7 +690,7 @@ const App = () => {
         else {
             alert("Could not generate GeoJSON for the current arrow.");
         }
-    }, [editingState, currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentArrowName, generateGeoJsonForArrow]);
+    }, [editingState, currentAnchors.length, getAnchorsData, currentShaftThicknessPixels, currentArrowHeadLengthPixels, currentArrowHeadWidthPixels, currentShaftThicknessFactor, currentArrowHeadLengthFactor, currentArrowHeadWidthFactor, currentArrowName, generateGeoJsonForArrowForMap]);
     const handleSaveAllGeoJson = useCallback(() => {
         if (editingState !== EditingState.Idle && currentAnchors.length > 0) {
             alert("Please finish or cancel current editing before saving all arrows.");
@@ -839,7 +705,7 @@ const App = () => {
                     handle1: sa.handle1,
                     handle2: sa.handle2,
                 }));
-                const feature = generateGeoJsonForArrow(anchorsForGeoJson, arrowGroup.arrowParameters, arrowGroup.arrowName);
+                const feature = generateGeoJsonForArrowForMap(anchorsForGeoJson, arrowGroup.arrowParameters, arrowGroup.arrowName);
                 if (feature)
                     features.push(feature);
             }
@@ -859,22 +725,18 @@ const App = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    }, [editingState, currentAnchors.length, generateGeoJsonForArrow]);
+    }, [editingState, currentAnchors.length, generateGeoJsonForArrowForMap]);
     // Effects
     useEffect(() => {
         if (!mapContainerRef.current || mapRef.current)
             return;
-        const map = L.map(mapContainerRef.current).setView(INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap contributors',
-        }).addTo(map);
+        const { map, drawingLayer, arrowLayer, editingArrowLayer } = setupLeafletMap(mapContainerRef.current);
         mapRef.current = map;
-        drawingLayerRef.current = L.layerGroup().addTo(map);
-        arrowLayerRef.current = L.layerGroup().addTo(map);
-        editingArrowLayerRef.current = L.layerGroup().addTo(map);
+        drawingLayerRef.current = drawingLayer;
+        arrowLayerRef.current = arrowLayer;
+        editingArrowLayerRef.current = editingArrowLayer;
         return () => {
-            map.remove();
+            teardownLeafletMap(map);
             mapRef.current = null;
         };
     }, []);
@@ -1072,11 +934,11 @@ const App = () => {
         });
     }, [currentAnchors, editingState, removeAnchor, handleAnchorDragStart, handleAnchorDrag, handleAnchorDragEnd, handleGenericDragStart, handleHandleDrag, handleGenericDragEnd]);
     // Control panel props
-    const canEditParameters = (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) && currentAnchors.length >= 2;
-    const canCopyCurrentArrow = (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) && currentAnchors.length >= 2;
-    const canDeleteArrow = editingState === EditingState.EditingSelected && selectedArrowGroup !== null;
+    const canEditParameters = getCanEditParameters(editingState) && currentAnchors.length >= 2;
+    const canCopyCurrentArrow = isEditing(editingState) && currentAnchors.length >= 2;
+    const canDeleteArrow = getCanDeleteArrow(editingState, selectedArrowGroup !== null);
     const canCopyGeoJsonCurrent = canEditParameters;
-    const canSaveAllGeoJsonExport = editingState === EditingState.Idle && (arrowLayerRef.current?.getLayers().length ?? 0) > 0;
+    const canSaveAllGeoJsonExport = getCanSaveAllGeoJson(editingState, arrowLayerRef.current?.getLayers().length ?? 0);
     return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { editingState: editingState, onDrawArrow: handleDrawArrow, onCopyArrow: handleCopyArrow, canCopyArrow: canCopyCurrentArrow, onDeleteArrow: handleDeleteSelectedArrow, canDeleteArrow: canDeleteArrow, shaftThicknessFactor: currentShaftThicknessFactor, onShaftThicknessChange: handleShaftThicknessChange, arrowHeadLengthFactor: currentArrowHeadLengthFactor, onArrowHeadLengthChange: handleArrowHeadLengthChange, arrowHeadWidthFactor: currentArrowHeadWidthFactor, onArrowHeadWidthChange: handleArrowHeadWidthChange, canEditParameters: canEditParameters, arrowName: currentArrowName, onArrowNameChange: setCurrentArrowName, canEditName: editingState !== EditingState.Idle, onCopyGeoJson: handleCopyGeoJson, canCopyGeoJson: canCopyGeoJsonCurrent, onSaveAllGeoJson: handleSaveAllGeoJson, canSaveAllGeoJson: canSaveAllGeoJsonExport, onConfirm: () => handleConfirm(true), onCancel: handleCancel })] }));
 };
 export default App;
