@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "check": "node --check index.js && node --check App.js && node --check components/ControlPanel.js && node --check constants.js && node --check types.js && node --check utils/geometry.js"
+    "lint": "node scripts/lint.mjs",
+    "format:check": "node scripts/format-check.mjs",
+    "validate:imports": "node scripts/validate-imports.mjs",
+    "check": "npm run lint && npm run format:check && npm run validate:imports"
   }
 }
