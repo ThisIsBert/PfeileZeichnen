@@ -173,6 +173,11 @@ export function calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWi
         leftShaft.push(pointAdd(p, pointMultiply(perpT, halfWidth)));
         rightShaft.push(pointSubtract(p, pointMultiply(perpT, halfWidth)));
     }
+    if (leftShaft.length > 0 && rightShaft.length > 0) {
+        const neckHalf = neckWidthPx / 2;
+        leftShaft[leftShaft.length - 1] = pointAdd(neckPoint, pointMultiply(neckPerp, neckHalf));
+        rightShaft[rightShaft.length - 1] = pointSubtract(neckPoint, pointMultiply(neckPerp, neckHalf));
+    }
     const mergedOutlinePoints = [];
     const MIN_DIST_SQ = 1e-12;
     function addPointIfNotDuplicate(point) {

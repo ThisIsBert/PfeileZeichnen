@@ -320,20 +320,26 @@ const App = () => {
         const neckPt = pointAtDistance(neckS);
         const tip = pts[pts.length - 1];
         const rearTan = normalize(pointSubtract(pts[Math.min(1, pts.length - 1)], pts[0]));
-        const neckTan = normalize(pointSubtract(tip, neckPt));
+        let neckTan = { x: 1, y: 0 };
+        for (let pIdx = pts.length - 2; pIdx >= 0; pIdx--) {
+            const diff = pointSubtract(tip, pts[pIdx]);
+            if (pointLength(diff) > 1e-6) {
+                neckTan = normalize(diff);
+                break;
+            }
+        }
         const rearN = normalize(perpendicular(rearTan.x || rearTan.y ? rearTan : { x: 1, y: 0 }));
         const neckN = normalize(perpendicular(neckTan.x || neckTan.y ? neckTan : { x: 1, y: 0 }));
         const rearHalf = (currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) / 2;
         const neckHalf = (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX) / 2;
         const headHalf = (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) / 2;
-        const headBaseCenter = pointSubtract(tip, pointMultiply(neckTan, headLengthPx));
+        const headBaseCenter = neckPt;
         return {
             rearLeft: pointAdd(rearPt, pointMultiply(rearN, rearHalf)),
             rearRight: pointSubtract(rearPt, pointMultiply(rearN, rearHalf)),
             neckLeft: pointAdd(neckPt, pointMultiply(neckN, neckHalf)),
             neckRight: pointSubtract(neckPt, pointMultiply(neckN, neckHalf)),
-            headLeft: pointAdd(neckPt, pointMultiply(neckN, headHalf)),
-            headRight: pointSubtract(neckPt, pointMultiply(neckN, headHalf)),
+            headControl: pointAdd(neckPt, pointMultiply(neckN, headHalf)),
             headBaseCenter,
             tip,
             rearPt,
@@ -367,15 +373,12 @@ const App = () => {
         else if (key === 'neckRight') {
             setCurrentNeckWidthPx(Math.max(2, -2 * signedDistance(geom.neckPt, geom.neckN)));
         }
-        else if (key === 'headLeft') {
-            setCurrentHeadWidthPx(Math.max(2, 2 * signedDistance(geom.neckPt, geom.neckN)));
-        }
-        else if (key === 'headRight') {
-            setCurrentHeadWidthPx(Math.max(2, -2 * signedDistance(geom.neckPt, geom.neckN)));
-        }
-        else if (key === 'headLength') {
-            const d = toPt(geom.tip, geom.neckTan);
-            setCurrentHeadLengthPx(Math.max(2, -d.dot));
+        else if (key === 'headControl') {
+            const tipToMarker = pointSubtract(markerPt, geom.tip);
+            const projectedLength = -((tipToMarker.x * geom.neckTan.x) + (tipToMarker.y * geom.neckTan.y));
+            const projectedHalfWidth = (tipToMarker.x * geom.neckN.x) + (tipToMarker.y * geom.neckN.y);
+            setCurrentHeadLengthPx(Math.max(2, projectedLength));
+            setCurrentHeadWidthPx(Math.max(2, Math.abs(projectedHalfWidth) * 2));
         }
     }, [getShapeControlGeometry]);
     const finalizeCurrentArrow = useCallback(() => {
@@ -917,9 +920,7 @@ const App = () => {
             { key: 'rearRight', point: geom.rearRight },
             { key: 'neckLeft', point: geom.neckLeft },
             { key: 'neckRight', point: geom.neckRight },
-            { key: 'headLeft', point: geom.headLeft },
-            { key: 'headRight', point: geom.headRight },
-            { key: 'headLength', point: geom.headBaseCenter },
+            { key: 'headControl', point: geom.headControl },
         ];
         controlDefs.forEach((control) => {
             const p = control.point;
