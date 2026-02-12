@@ -362,30 +362,40 @@ const App = () => {
             return pointAdd(base, pointMultiply(dir, t));
         };
         let markerPt = map.latLngToLayerPoint(e.target.getLatLng());
-        if (key === 'rearLeft' || key === 'rearRight') {
-            markerPt = projectToAxis(geom.rearPt, geom.rearN, markerPt);
-            e.target.setLatLng(map.layerPointToLatLng(L.point(markerPt.x, markerPt.y)));
-        }
-        else if (key === 'neckLeft' || key === 'neckRight') {
-            markerPt = projectToAxis(geom.neckPt, geom.neckN, markerPt);
-            e.target.setLatLng(map.layerPointToLatLng(L.point(markerPt.x, markerPt.y)));
-        }
         const toPt = (base, vec) => ({ x: markerPt.x - base.x, y: markerPt.y - base.y, dot: (markerPt.x - base.x) * vec.x + (markerPt.y - base.y) * vec.y });
         const signedDistance = (base, dir) => {
             const d = toPt(base, dir);
             return d.dot;
         };
+        const sideSafeDistance = (base, normal, side) => {
+            const sideNormal = side === 'left' ? normal : pointMultiply(normal, -1);
+            const projectedPoint = projectToAxis(base, sideNormal, markerPt);
+            const projectedDistance = Math.max(0, signedDistance(base, sideNormal));
+            const sideLockedPoint = pointAdd(base, pointMultiply(sideNormal, projectedDistance));
+            if (projectedPoint.x !== sideLockedPoint.x || projectedPoint.y !== sideLockedPoint.y) {
+                markerPt = sideLockedPoint;
+            }
+            else {
+                markerPt = projectedPoint;
+            }
+            e.target.setLatLng(map.layerPointToLatLng(L.point(markerPt.x, markerPt.y)));
+            return projectedDistance;
+        };
         if (key === 'rearLeft') {
-            setCurrentRearWidthPx(Math.max(2, 2 * signedDistance(geom.rearPt, geom.rearN)));
+            const distance = sideSafeDistance(geom.rearPt, geom.rearN, 'left');
+            setCurrentRearWidthPx(Math.max(2, 2 * distance));
         }
         else if (key === 'rearRight') {
-            setCurrentRearWidthPx(Math.max(2, -2 * signedDistance(geom.rearPt, geom.rearN)));
+            const distance = sideSafeDistance(geom.rearPt, geom.rearN, 'right');
+            setCurrentRearWidthPx(Math.max(2, 2 * distance));
         }
         else if (key === 'neckLeft') {
-            setCurrentNeckWidthPx(Math.max(2, 2 * signedDistance(geom.neckPt, geom.neckN)));
+            const distance = sideSafeDistance(geom.neckPt, geom.neckN, 'left');
+            setCurrentNeckWidthPx(Math.max(2, 2 * distance));
         }
         else if (key === 'neckRight') {
-            setCurrentNeckWidthPx(Math.max(2, -2 * signedDistance(geom.neckPt, geom.neckN)));
+            const distance = sideSafeDistance(geom.neckPt, geom.neckN, 'right');
+            setCurrentNeckWidthPx(Math.max(2, 2 * distance));
         }
         else if (key === 'headControl') {
             const currentLength = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
