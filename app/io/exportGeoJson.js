@@ -10,7 +10,7 @@ import { getValidPointsAndLength, calculateArrowOutlinePoints } from '../geometr
 export function generateGeoJsonForArrow(map, anchorsData, params, name) {
   if (!map || anchorsData.length < 2) return null;
 
-  const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsData);
+  const { pts, totalLength, cumLengths, centerline } = getValidPointsAndLength(map, anchorsData);
   if (pts.length < 2) return null;
 
   let rearWidthPx = params.rearWidthPx ?? 0;
@@ -24,7 +24,9 @@ export function generateGeoJsonForArrow(map, anchorsData, params, name) {
   headWidthPx *= scale;
   headLengthPx *= scale;
 
-  const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
+  const outlinePoints = centerline
+    ? calculateArrowOutlinePoints(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx)
+    : calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
   if (!outlinePoints) return null;
 
   try {

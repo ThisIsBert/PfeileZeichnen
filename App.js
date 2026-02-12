@@ -4,7 +4,7 @@ import L from 'leaflet';
 import { EditingState } from './types.js';
 import ControlPanel from './components/ControlPanel.js';
 import { DEFAULT_REAR_WIDTH_PX, DEFAULT_NECK_WIDTH_PX, DEFAULT_HEAD_WIDTH_PX, DEFAULT_HEAD_LENGTH_PX, anchorIcon, handleIcon } from './constants.js';
-import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, calculateArrowOutlinePoints } from './app/geometry/index.js';
+import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, sampleCenterlineAtDistance, calculateArrowOutlinePoints } from './app/geometry/index.js';
 import { setupLeafletMap, teardownLeafletMap } from './app/map/lifecycle.js';
 import { insertAnchorWithAlignedHandles } from './app/map/interactions/handleUpdates.js';
 import { getContainerPoint, getInitialLayerPoints, translateAnchorsByDelta } from './app/map/interactions/drag.js';
@@ -134,7 +134,7 @@ const App = () => {
                 setCurrentHeadWidthPx(DEFAULT_HEAD_WIDTH_PX);
             return;
         }
-        const { pts, totalLength, cumLengths, validCurveData } = getValidPointsAndLength(map, anchorsData);
+        const { pts, totalLength, validCurveData, centerline } = getValidPointsAndLength(map, anchorsData);
         if (pts.length < 2) {
             resetCurrentPixelValues();
             return;
@@ -163,7 +163,7 @@ const App = () => {
         const neckWidthPx = Math.max(0, (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX) * scale);
         const headLengthPx = Math.min((currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX) * scale, totalLength);
         const headWidthPx = Math.max(0, (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) * scale);
-        const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
+        const outlinePoints = calculateArrowOutlinePoints(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
         if (outlinePoints) {
             try {
                 const outlineLatLngs = outlinePoints.map(p => map.layerPointToLatLng(L.point(p.x, p.y)));
@@ -302,35 +302,22 @@ const App = () => {
         if (!map || currentAnchors.length < 2)
             return null;
         const anchorsData = getAnchorsData();
-        const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsData);
-        if (pts.length < 2 || totalLength <= 1e-6)
+        const { totalLength, centerline } = getValidPointsAndLength(map, anchorsData);
+        if (!centerline || totalLength <= 1e-6)
             return null;
         const headLengthPx = Math.min(currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX, totalLength);
         const neckS = Math.max(0, totalLength - headLengthPx);
-        const pointAtDistance = (s) => {
-            for (let i = 0; i < cumLengths.length - 1; i++) {
-                if (cumLengths[i] <= s && cumLengths[i + 1] >= s) {
-                    const segLen = cumLengths[i + 1] - cumLengths[i];
-                    const t = segLen > 1e-9 ? (s - cumLengths[i]) / segLen : 0;
-                    return { x: pts[i].x + t * (pts[i + 1].x - pts[i].x), y: pts[i].y + t * (pts[i + 1].y - pts[i].y) };
-                }
-            }
-            return pts[pts.length - 1];
-        };
-        const rearPt = pts[0];
-        const neckPt = pointAtDistance(neckS);
-        const tip = pts[pts.length - 1];
-        const rearTan = normalize(pointSubtract(pts[Math.min(1, pts.length - 1)], pts[0]));
-        let neckTan = { x: 1, y: 0 };
-        for (let pIdx = pts.length - 2; pIdx >= 0; pIdx--) {
-            const diff = pointSubtract(tip, pts[pIdx]);
-            if (pointLength(diff) > 1e-6) {
-                neckTan = normalize(diff);
-                break;
-            }
-        }
-        const rearN = normalize(perpendicular(rearTan.x || rearTan.y ? rearTan : { x: 1, y: 0 }));
-        const neckN = normalize(perpendicular(neckTan.x || neckTan.y ? neckTan : { x: 1, y: 0 }));
+        const rearStation = sampleCenterlineAtDistance(centerline, 0);
+        const neckStation = sampleCenterlineAtDistance(centerline, neckS);
+        const tipStation = sampleCenterlineAtDistance(centerline, totalLength);
+        if (!rearStation || !neckStation || !tipStation)
+            return null;
+        const rearPt = rearStation.pt;
+        const neckPt = neckStation.pt;
+        const tip = tipStation.pt;
+        const rearN = rearStation.normal;
+        const neckN = neckStation.normal;
+        const neckTan = neckStation.tangent;
         const rearHalf = (currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) / 2;
         const neckHalf = (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX) / 2;
         const headHalf = (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) / 2;
@@ -348,6 +335,7 @@ const App = () => {
             rearN,
             neckN,
             neckTan,
+            centerline,
         };
     }, [currentAnchors, getAnchorsData, currentHeadLengthPx, currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx]);
 
@@ -437,13 +425,13 @@ const App = () => {
             headWidthPx,
             baseZoom
         });
-        const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, getAnchorsData());
-        if (pts.length < 2) {
+        const { totalLength, centerline } = getValidPointsAndLength(map, getAnchorsData());
+        if (!centerline) {
             console.error("Finalize: Invalid points for geometry.");
             return null;
         }
         const scale = map.getZoomScale(map.getZoom(), baseZoom);
-        const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx * scale, neckWidthPx * scale, headWidthPx * scale, headLengthPx * scale);
+        const outlinePoints = calculateArrowOutlinePoints(centerline, rearWidthPx * scale, neckWidthPx * scale, headWidthPx * scale, headLengthPx * scale);
         if (!outlinePoints) {
             console.warn("Finalize: No polygons generated for arrow.");
             return null;
@@ -518,11 +506,11 @@ const App = () => {
             return;
         savedArrowsBackup.forEach(arrowData => {
             const anchorsDataForGeom = arrowData.savedAnchors.map((sa) => createArrowAnchorData(sa));
-            const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsDataForGeom);
-            if (pts.length < 2 || arrowData.arrowParameters.rearWidthPx === null || arrowData.arrowParameters.neckWidthPx === null || arrowData.arrowParameters.headLengthPx === null || arrowData.arrowParameters.headWidthPx === null)
+            const { centerline } = getValidPointsAndLength(map, anchorsDataForGeom);
+            if (!centerline || arrowData.arrowParameters.rearWidthPx === null || arrowData.arrowParameters.neckWidthPx === null || arrowData.arrowParameters.headLengthPx === null || arrowData.arrowParameters.headWidthPx === null)
                 return;
             const scale = arrowData.arrowParameters.baseZoom !== null ? map.getZoomScale(map.getZoom(), arrowData.arrowParameters.baseZoom) : 1;
-            const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, (arrowData.arrowParameters.rearWidthPx ?? 0) * scale, (arrowData.arrowParameters.neckWidthPx ?? 0) * scale, (arrowData.arrowParameters.headWidthPx ?? 0) * scale, (arrowData.arrowParameters.headLengthPx ?? 0) * scale);
+            const outlinePoints = calculateArrowOutlinePoints(centerline, (arrowData.arrowParameters.rearWidthPx ?? 0) * scale, (arrowData.arrowParameters.neckWidthPx ?? 0) * scale, (arrowData.arrowParameters.headWidthPx ?? 0) * scale, (arrowData.arrowParameters.headLengthPx ?? 0) * scale);
             if (outlinePoints) {
                 const restoredGroup = L.layerGroup();
                 try {
