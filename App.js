@@ -318,22 +318,31 @@ const App = () => {
         };
         const rearPt = pts[0];
         const neckPt = pointAtDistance(neckS);
-        const shaftMidS = neckS / 2;
-        const shaftMidPt = pointAtDistance(shaftMidS);
         const tip = pts[pts.length - 1];
         const rearTan = normalize(pointSubtract(pts[Math.min(1, pts.length - 1)], pts[0]));
         const neckTan = normalize(pointSubtract(tip, neckPt));
-        const shaftMidTan = (() => {
-            const delta = Math.max(2, totalLength * 0.01);
-            const a = pointAtDistance(Math.max(0, shaftMidS - delta));
-            const b = pointAtDistance(Math.min(neckS, shaftMidS + delta));
-            return normalize(pointSubtract(b, a));
-        })();
         const rearN = normalize(perpendicular(rearTan.x || rearTan.y ? rearTan : { x: 1, y: 0 }));
         const neckN = normalize(perpendicular(neckTan.x || neckTan.y ? neckTan : { x: 1, y: 0 }));
-        const shaftMidN = normalize(perpendicular(shaftMidTan.x || shaftMidTan.y ? shaftMidTan : rearTan.x || rearTan.y ? rearTan : { x: 1, y: 0 }));
-        return { pts, totalLength, rearPt, neckPt, shaftMidPt, tip, rearN, neckN, shaftMidN, neckTan };
-    }, [currentAnchors, getAnchorsData, currentHeadLengthPx]);
+        const rearHalf = (currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) / 2;
+        const neckHalf = (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX) / 2;
+        const headHalf = (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) / 2;
+        const headBaseCenter = pointSubtract(tip, pointMultiply(neckTan, headLengthPx));
+        return {
+            rearLeft: pointAdd(rearPt, pointMultiply(rearN, rearHalf)),
+            rearRight: pointSubtract(rearPt, pointMultiply(rearN, rearHalf)),
+            neckLeft: pointAdd(neckPt, pointMultiply(neckN, neckHalf)),
+            neckRight: pointSubtract(neckPt, pointMultiply(neckN, neckHalf)),
+            headLeft: pointAdd(neckPt, pointMultiply(neckN, headHalf)),
+            headRight: pointSubtract(neckPt, pointMultiply(neckN, headHalf)),
+            headBaseCenter,
+            tip,
+            rearPt,
+            neckPt,
+            rearN,
+            neckN,
+            neckTan,
+        };
+    }, [currentAnchors, getAnchorsData, currentHeadLengthPx, currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx]);
 
     const updateShapeControl = useCallback((key, e) => {
         const map = mapRef.current;
@@ -342,23 +351,27 @@ const App = () => {
             return;
         const markerPt = map.latLngToLayerPoint(e.target.getLatLng());
         const toPt = (base, vec) => ({ x: markerPt.x - base.x, y: markerPt.y - base.y, dot: (markerPt.x - base.x) * vec.x + (markerPt.y - base.y) * vec.y });
-        if (key === 'rear') {
-            const d = toPt(geom.rearPt, geom.rearN);
-            setCurrentRearWidthPx(Math.max(2, 2 * d.dot));
+        const signedDistance = (base, dir) => {
+            const d = toPt(base, dir);
+            return d.dot;
+        };
+        if (key === 'rearLeft') {
+            setCurrentRearWidthPx(Math.max(2, 2 * signedDistance(geom.rearPt, geom.rearN)));
         }
-        else if (key === 'neck') {
-            const d = toPt(geom.neckPt, geom.neckN);
-            setCurrentNeckWidthPx(Math.max(2, 2 * d.dot));
+        else if (key === 'rearRight') {
+            setCurrentRearWidthPx(Math.max(2, -2 * signedDistance(geom.rearPt, geom.rearN)));
         }
-        else if (key === 'shaftUniform') {
-            const d = toPt(geom.shaftMidPt, geom.shaftMidN);
-            const nextWidth = Math.max(2, 2 * d.dot);
-            setCurrentRearWidthPx(nextWidth);
-            setCurrentNeckWidthPx(nextWidth);
+        else if (key === 'neckLeft') {
+            setCurrentNeckWidthPx(Math.max(2, 2 * signedDistance(geom.neckPt, geom.neckN)));
         }
-        else if (key === 'headWidth') {
-            const d = toPt(geom.neckPt, geom.neckN);
-            setCurrentHeadWidthPx(Math.max(2, 2 * d.dot));
+        else if (key === 'neckRight') {
+            setCurrentNeckWidthPx(Math.max(2, -2 * signedDistance(geom.neckPt, geom.neckN)));
+        }
+        else if (key === 'headLeft') {
+            setCurrentHeadWidthPx(Math.max(2, 2 * signedDistance(geom.neckPt, geom.neckN)));
+        }
+        else if (key === 'headRight') {
+            setCurrentHeadWidthPx(Math.max(2, -2 * signedDistance(geom.neckPt, geom.neckN)));
         }
         else if (key === 'headLength') {
             const d = toPt(geom.tip, geom.neckTan);
@@ -900,14 +913,16 @@ const App = () => {
             return;
         }
         const controlDefs = [
-            { key: 'rear', base: geom.rearPt, dir: geom.rearN, distance: (currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) / 2 },
-            { key: 'neck', base: geom.neckPt, dir: geom.neckN, distance: (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX) / 2 },
-            { key: 'shaftUniform', base: geom.shaftMidPt, dir: geom.shaftMidN, distance: ((currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) + (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX)) / 4 },
-            { key: 'headWidth', base: geom.neckPt, dir: geom.neckN, distance: (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) / 2 },
-            { key: 'headLength', base: geom.tip, dir: pointMultiply(geom.neckTan, -1), distance: currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX },
+            { key: 'rearLeft', point: geom.rearLeft },
+            { key: 'rearRight', point: geom.rearRight },
+            { key: 'neckLeft', point: geom.neckLeft },
+            { key: 'neckRight', point: geom.neckRight },
+            { key: 'headLeft', point: geom.headLeft },
+            { key: 'headRight', point: geom.headRight },
+            { key: 'headLength', point: geom.headBaseCenter },
         ];
         controlDefs.forEach((control) => {
-            const p = pointAdd(control.base, pointMultiply(control.dir, control.distance));
+            const p = control.point;
             const latlng = map.layerPointToLatLng(L.point(p.x, p.y));
             let marker = shapeControlMarkersRef.current.get(control.key);
             if (!marker) {
