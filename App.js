@@ -43,6 +43,7 @@ const App = () => {
     const connector1LinesRef = useRef(new Map());
     const connector2LinesRef = useRef(new Map());
     const shapeControlMarkersRef = useRef(new Map());
+    const activeShapeControlKeyRef = useRef(null);
     const getAnchorsData = useCallback(() => toArrowAnchorData(currentAnchors), [currentAnchors]);
     const ensureShapeDefaults = useCallback(() => {
         if (currentRearWidthPx !== null && currentNeckWidthPx !== null && currentHeadWidthPx !== null && currentHeadLengthPx !== null) {
@@ -355,7 +356,20 @@ const App = () => {
         const geom = getShapeControlGeometry();
         if (!map || !geom)
             return;
-        const markerPt = map.latLngToLayerPoint(e.target.getLatLng());
+        const projectToAxis = (base, dir, pt) => {
+            const delta = pointSubtract(pt, base);
+            const t = (delta.x * dir.x) + (delta.y * dir.y);
+            return pointAdd(base, pointMultiply(dir, t));
+        };
+        let markerPt = map.latLngToLayerPoint(e.target.getLatLng());
+        if (key === 'rearLeft' || key === 'rearRight') {
+            markerPt = projectToAxis(geom.rearPt, geom.rearN, markerPt);
+            e.target.setLatLng(map.layerPointToLatLng(L.point(markerPt.x, markerPt.y)));
+        }
+        else if (key === 'neckLeft' || key === 'neckRight') {
+            markerPt = projectToAxis(geom.neckPt, geom.neckN, markerPt);
+            e.target.setLatLng(map.layerPointToLatLng(L.point(markerPt.x, markerPt.y)));
+        }
         const toPt = (base, vec) => ({ x: markerPt.x - base.x, y: markerPt.y - base.y, dot: (markerPt.x - base.x) * vec.x + (markerPt.y - base.y) * vec.y });
         const signedDistance = (base, dir) => {
             const d = toPt(base, dir);
@@ -384,6 +398,14 @@ const App = () => {
             setCurrentHeadWidthPx(Math.max(2, 2 * (currentHalfWidth + projectedHalfWidthDelta)));
         }
     }, [getShapeControlGeometry, currentHeadLengthPx, DEFAULT_HEAD_LENGTH_PX, currentHeadWidthPx, DEFAULT_HEAD_WIDTH_PX]);
+    const handleShapeControlDragStart = useCallback((e, key) => {
+        activeShapeControlKeyRef.current = key;
+        handleGenericDragStart(e);
+    }, [handleGenericDragStart]);
+    const handleShapeControlDragEnd = useCallback((e) => {
+        activeShapeControlKeyRef.current = null;
+        handleGenericDragEnd(e);
+    }, [handleGenericDragEnd]);
     const finalizeCurrentArrow = useCallback(() => {
         const map = mapRef.current;
         const arrowLyr = arrowLayerRef.current;
@@ -916,6 +938,7 @@ const App = () => {
         if (!geom || !isEditing(editingState)) {
             shapeControlMarkersRef.current.forEach((m) => drawingLayer.removeLayer(m));
             shapeControlMarkersRef.current.clear();
+            activeShapeControlKeyRef.current = null;
             return;
         }
         const controlDefs = [
@@ -931,16 +954,16 @@ const App = () => {
             let marker = shapeControlMarkersRef.current.get(control.key);
             if (!marker) {
                 marker = L.marker(latlng, { draggable: true, zIndexOffset: 1100, icon: L.divIcon({ html: '<div style="width:10px;height:10px;border-radius:5px;background:#111;border:2px solid #fff"></div>', className: 'leaflet-div-icon shape-control-icon', iconSize: [10, 10], iconAnchor: [5, 5] }) }).addTo(drawingLayer);
-                marker.on('dragstart', handleGenericDragStart);
+                marker.on('dragstart', (e) => handleShapeControlDragStart(e, control.key));
                 marker.on('drag', (e) => updateShapeControl(control.key, e));
-                marker.on('dragend', handleGenericDragEnd);
+                marker.on('dragend', handleShapeControlDragEnd);
                 shapeControlMarkersRef.current.set(control.key, marker);
             }
-            else {
+            else if (activeShapeControlKeyRef.current !== control.key) {
                 marker.setLatLng(latlng);
             }
         });
-    }, [editingState, getShapeControlGeometry, currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx, currentHeadLengthPx, updateShapeControl, handleGenericDragStart, handleGenericDragEnd]);
+    }, [editingState, getShapeControlGeometry, currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx, currentHeadLengthPx, updateShapeControl, handleShapeControlDragStart, handleShapeControlDragEnd]);
 
     // Control panel contract
     const canEditParameters = getCanEditParameters(editingState) && currentAnchors.length >= 2;
