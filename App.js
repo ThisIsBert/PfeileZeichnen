@@ -412,9 +412,10 @@ const App = () => {
         arrowLyr.addLayer(newArrowGroup);
         return newArrowGroup;
     }, [
-        currentAnchors, getAnchorsData, DEFAULT_REAR_WIDTH_PX, DEFAULT_NECK_WIDTH_PX, DEFAULT_HEAD_LENGTH_PX,
-        DEFAULT_HEAD_WIDTH_PX, currentRearWidthPx, currentNeckWidthPx, currentHeadLengthPx,
-        currentHeadWidthPx, currentArrowName, arrowNameCounter, selectedArrowGroup
+        currentAnchors, getAnchorsData, DEFAULT_REAR_WIDTH_PX, DEFAULT_NECK_WIDTH_PX,
+        DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentRearWidthPx,
+        currentNeckWidthPx, currentHeadLengthPx, currentHeadWidthPx,
+        currentArrowName, arrowNameCounter, selectedArrowGroup
     ]);
     const handleSelectArrow = useCallback((arrowGroupToSelect) => {
         const map = mapRef.current;
