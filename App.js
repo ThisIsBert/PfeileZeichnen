@@ -374,13 +374,16 @@ const App = () => {
             setCurrentNeckWidthPx(Math.max(2, -2 * signedDistance(geom.neckPt, geom.neckN)));
         }
         else if (key === 'headControl') {
-            const tipToMarker = pointSubtract(markerPt, geom.tip);
-            const projectedLength = -((tipToMarker.x * geom.neckTan.x) + (tipToMarker.y * geom.neckTan.y));
-            const projectedHalfWidth = (tipToMarker.x * geom.neckN.x) + (tipToMarker.y * geom.neckN.y);
-            setCurrentHeadLengthPx(Math.max(2, projectedLength));
-            setCurrentHeadWidthPx(Math.max(2, Math.abs(projectedHalfWidth) * 2));
+            const currentLength = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
+            const currentHalfWidth = (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) / 2;
+            const controlOrigin = pointAdd(geom.neckPt, pointMultiply(geom.neckN, currentHalfWidth));
+            const controlDelta = pointSubtract(markerPt, controlOrigin);
+            const projectedLengthDelta = -((controlDelta.x * geom.neckTan.x) + (controlDelta.y * geom.neckTan.y));
+            const projectedHalfWidthDelta = (controlDelta.x * geom.neckN.x) + (controlDelta.y * geom.neckN.y);
+            setCurrentHeadLengthPx(Math.max(2, currentLength + projectedLengthDelta));
+            setCurrentHeadWidthPx(Math.max(2, 2 * (currentHalfWidth + projectedHalfWidthDelta)));
         }
-    }, [getShapeControlGeometry]);
+    }, [getShapeControlGeometry, currentHeadLengthPx, DEFAULT_HEAD_LENGTH_PX, currentHeadWidthPx, DEFAULT_HEAD_WIDTH_PX]);
     const finalizeCurrentArrow = useCallback(() => {
         const map = mapRef.current;
         const arrowLyr = arrowLayerRef.current;
