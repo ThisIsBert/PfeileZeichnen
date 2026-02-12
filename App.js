@@ -236,7 +236,7 @@ const App = () => {
     const handleAnchorDrag = useCallback((e, anchorId) => {
         const map = mapRef.current;
         const targetMarker = e.target;
-        const newLatLngLiteral = targetMarker.getLatLng().wrap();
+        const newLatLngLiteral = targetMarker.getLatLng();
         setCurrentAnchors(prev => prev.map(a => {
             if (a.id === anchorId && map && a._oldLatLng) { // Ensure _oldLatLng is present from dragstart
                 const updatedAnchorPart = createArrowAnchorData({ latlng: createLatLngLiteral(newLatLngLiteral), handle1: a.handle1, handle2: a.handle2 });
@@ -244,11 +244,11 @@ const App = () => {
                     const newAnchorPoint = map.latLngToLayerPoint(newLatLngLiteral);
                     if (a.handle1 && a._handle1OffsetPixels) {
                         const newHandle1GeomPoint = pointAdd(newAnchorPoint, a._handle1OffsetPixels);
-                        updatedAnchorPart.handle1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newHandle1GeomPoint.x, newHandle1GeomPoint.y)).wrap());
+                        updatedAnchorPart.handle1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newHandle1GeomPoint.x, newHandle1GeomPoint.y)));
                     }
                     if (a.handle2 && a._handle2OffsetPixels) {
                         const newHandle2GeomPoint = pointAdd(newAnchorPoint, a._handle2OffsetPixels);
-                        updatedAnchorPart.handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newHandle2GeomPoint.x, newHandle2GeomPoint.y)).wrap());
+                        updatedAnchorPart.handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newHandle2GeomPoint.x, newHandle2GeomPoint.y)));
                     }
                 }
                 catch (err) {
@@ -265,7 +265,7 @@ const App = () => {
     }, [handleGenericDragEnd]);
     const handleHandleDrag = useCallback((e, anchorId, handleNum) => {
         const targetMarker = e.target;
-        const newHandleLatLngLiteral = targetMarker.getLatLng().wrap();
+        const newHandleLatLngLiteral = targetMarker.getLatLng();
         setCurrentAnchors(prev => prev.map(a => {
             if (a.id === anchorId) {
                 const updatedAnchorPart = (handleNum === 1)
@@ -306,23 +306,33 @@ const App = () => {
             return null;
         const headLengthPx = Math.min(currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX, totalLength);
         const neckS = Math.max(0, totalLength - headLengthPx);
-        const rearPt = pts[0];
-        const neckPt = (() => {
+        const pointAtDistance = (s) => {
             for (let i = 0; i < cumLengths.length - 1; i++) {
-                if (cumLengths[i] <= neckS && cumLengths[i + 1] >= neckS) {
+                if (cumLengths[i] <= s && cumLengths[i + 1] >= s) {
                     const segLen = cumLengths[i + 1] - cumLengths[i];
-                    const t = segLen > 1e-9 ? (neckS - cumLengths[i]) / segLen : 0;
+                    const t = segLen > 1e-9 ? (s - cumLengths[i]) / segLen : 0;
                     return { x: pts[i].x + t * (pts[i + 1].x - pts[i].x), y: pts[i].y + t * (pts[i + 1].y - pts[i].y) };
                 }
             }
             return pts[pts.length - 1];
-        })();
+        };
+        const rearPt = pts[0];
+        const neckPt = pointAtDistance(neckS);
+        const shaftMidS = neckS / 2;
+        const shaftMidPt = pointAtDistance(shaftMidS);
         const tip = pts[pts.length - 1];
         const rearTan = normalize(pointSubtract(pts[Math.min(1, pts.length - 1)], pts[0]));
         const neckTan = normalize(pointSubtract(tip, neckPt));
+        const shaftMidTan = (() => {
+            const delta = Math.max(2, totalLength * 0.01);
+            const a = pointAtDistance(Math.max(0, shaftMidS - delta));
+            const b = pointAtDistance(Math.min(neckS, shaftMidS + delta));
+            return normalize(pointSubtract(b, a));
+        })();
         const rearN = normalize(perpendicular(rearTan.x || rearTan.y ? rearTan : { x: 1, y: 0 }));
         const neckN = normalize(perpendicular(neckTan.x || neckTan.y ? neckTan : { x: 1, y: 0 }));
-        return { pts, totalLength, rearPt, neckPt, tip, rearN, neckN, neckTan };
+        const shaftMidN = normalize(perpendicular(shaftMidTan.x || shaftMidTan.y ? shaftMidTan : rearTan.x || rearTan.y ? rearTan : { x: 1, y: 0 }));
+        return { pts, totalLength, rearPt, neckPt, shaftMidPt, tip, rearN, neckN, shaftMidN, neckTan };
     }, [currentAnchors, getAnchorsData, currentHeadLengthPx]);
 
     const updateShapeControl = useCallback((key, e) => {
@@ -339,6 +349,12 @@ const App = () => {
         else if (key === 'neck') {
             const d = toPt(geom.neckPt, geom.neckN);
             setCurrentNeckWidthPx(Math.max(2, 2 * d.dot));
+        }
+        else if (key === 'shaftUniform') {
+            const d = toPt(geom.shaftMidPt, geom.shaftMidN);
+            const nextWidth = Math.max(2, 2 * d.dot);
+            setCurrentRearWidthPx(nextWidth);
+            setCurrentNeckWidthPx(nextWidth);
         }
         else if (key === 'headWidth') {
             const d = toPt(geom.neckPt, geom.neckN);
@@ -547,18 +563,18 @@ const App = () => {
             const newId = Date.now().toString() + Math.random().toString() + `_copy_${i}`;
             const currentAnchorPt = map.latLngToLayerPoint(L.latLng(aData.latlng.lat, aData.latlng.lng));
             const newGeomPt = pointAdd(currentAnchorPt, offset);
-            const newLatLng = createLatLngLiteral(map.layerPointToLatLng(L.point(newGeomPt.x, newGeomPt.y)).wrap());
+            const newLatLng = createLatLngLiteral(map.layerPointToLatLng(L.point(newGeomPt.x, newGeomPt.y)));
             let newH1 = undefined;
             if (aData.handle1) {
                 const currentH1Pt = map.latLngToLayerPoint(L.latLng(aData.handle1.lat, aData.handle1.lng));
                 const newH1GeomPt = pointAdd(currentH1Pt, offset);
-                newH1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newH1GeomPt.x, newH1GeomPt.y)).wrap());
+                newH1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newH1GeomPt.x, newH1GeomPt.y)));
             }
             let newH2 = undefined;
             if (aData.handle2) {
                 const currentH2Pt = map.latLngToLayerPoint(L.latLng(aData.handle2.lat, aData.handle2.lng));
                 const newH2GeomPt = pointAdd(currentH2Pt, offset);
-                newH2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newH2GeomPt.x, newH2GeomPt.y)).wrap());
+                newH2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newH2GeomPt.x, newH2GeomPt.y)));
             }
             return createArrowAnchorEntity({ id: newId, latlng: newLatLng, handle1: newH1, handle2: newH2 });
         });
@@ -886,6 +902,7 @@ const App = () => {
         const controlDefs = [
             { key: 'rear', base: geom.rearPt, dir: geom.rearN, distance: (currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) / 2 },
             { key: 'neck', base: geom.neckPt, dir: geom.neckN, distance: (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX) / 2 },
+            { key: 'shaftUniform', base: geom.shaftMidPt, dir: geom.shaftMidN, distance: ((currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) + (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX)) / 4 },
             { key: 'headWidth', base: geom.neckPt, dir: geom.neckN, distance: (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) / 2 },
             { key: 'headLength', base: geom.tip, dir: pointMultiply(geom.neckTan, -1), distance: currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX },
         ];
