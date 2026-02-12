@@ -1,10 +1,11 @@
 import L from 'leaflet';
+import { createArrowAnchorData, createArrowAnchorEntity, createLatLngLiteral } from '../types/arrowModel.js';
 
 /**
  * @param {{lat:number,lng:number}|import('leaflet').LatLng} value
  */
 export function toLatLngLiteral(value) {
-  return { lat: value.lat, lng: value.lng };
+  return createLatLngLiteral(value);
 }
 
 /**
@@ -19,11 +20,7 @@ export function toLeafletLatLng(value) {
  * @param {Array<{id?:string,latlng:any,handle1?:any,handle2?:any}>} anchors
  */
 export function toArrowAnchorData(anchors) {
-  return anchors.map((anchor) => ({
-    latlng: toLatLngLiteral(anchor.latlng),
-    handle1: anchor.handle1 ? toLatLngLiteral(anchor.handle1) : null,
-    handle2: anchor.handle2 ? toLatLngLiteral(anchor.handle2) : null,
-  }));
+  return anchors.map((anchor) => createArrowAnchorData(anchor));
 }
 
 /**
@@ -31,10 +28,10 @@ export function toArrowAnchorData(anchors) {
  * @param {string} [idSuffix='']
  */
 export function fromArrowAnchorData(anchorsData, idSuffix = '') {
-  return anchorsData.map((anchor, idx) => ({
+  return anchorsData.map((anchor, idx) => createArrowAnchorEntity({
     id: `${Date.now()}${Math.random()}${idSuffix}_${idx}`,
-    latlng: toLatLngLiteral(anchor.latlng),
-    handle1: anchor.handle1 ? toLatLngLiteral(anchor.handle1) : null,
-    handle2: anchor.handle2 ? toLatLngLiteral(anchor.handle2) : null,
+    latlng: anchor.latlng,
+    handle1: anchor.handle1,
+    handle2: anchor.handle2,
   }));
 }

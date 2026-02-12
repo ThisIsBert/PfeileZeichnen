@@ -1,5 +1,6 @@
 import L from 'leaflet';
 import { pointAdd, pointSubtract } from '../../geometry/index.js';
+import { createLatLngLiteral } from '../../types/arrowModel.js';
 
 /**
  * @param {import('leaflet').Map} map
@@ -36,15 +37,15 @@ export function translateAnchorsByDelta(map, prevAnchors, delta, initialAnchors,
     try {
       if (initialAnchors[i]) {
         const newAnchorGeomPoint = pointAdd(initialAnchors[i], delta);
-        newAnchorPart.latlng = map.layerPointToLatLng(L.point(newAnchorGeomPoint.x, newAnchorGeomPoint.y)).wrap();
+        newAnchorPart.latlng = createLatLngLiteral(map.layerPointToLatLng(L.point(newAnchorGeomPoint.x, newAnchorGeomPoint.y)).wrap());
       }
       if (anchor.handle1 && initialHandle1[i]) {
         const newHandle1GeomPoint = pointAdd(initialHandle1[i], delta);
-        newAnchorPart.handle1 = map.layerPointToLatLng(L.point(newHandle1GeomPoint.x, newHandle1GeomPoint.y)).wrap();
+        newAnchorPart.handle1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newHandle1GeomPoint.x, newHandle1GeomPoint.y)).wrap());
       }
       if (anchor.handle2 && initialHandle2[i]) {
         const newHandle2GeomPoint = pointAdd(initialHandle2[i], delta);
-        newAnchorPart.handle2 = map.layerPointToLatLng(L.point(newHandle2GeomPoint.x, newHandle2GeomPoint.y)).wrap();
+        newAnchorPart.handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newHandle2GeomPoint.x, newHandle2GeomPoint.y)).wrap());
       }
     } catch (error) {
       console.error('Arrow drag update error:', error);

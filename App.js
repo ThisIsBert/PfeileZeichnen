@@ -12,7 +12,7 @@ import { getContainerPoint, getInitialLayerPoints, translateAnchorsByDelta } fro
 import { generateGeoJsonForArrow } from './app/io/exportGeoJson.js';
 import { canDeleteArrow as getCanDeleteArrow, canEditParameters as getCanEditParameters, canSaveAllGeoJson as getCanSaveAllGeoJson, isEditing } from './app/state/editingState.js';
 import { fromArrowAnchorData, toArrowAnchorData } from './app/adapters/leafletArrowAdapter.js';
-import './app/types/arrow.js';
+import { createArrowAnchorData, createArrowAnchorEntity, createArrowParameters, createPersistedArrow, createLatLngLiteral } from './app/types/arrowModel.js';
 const App = () => {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
@@ -304,7 +304,7 @@ const App = () => {
         const anchor = currentAnchors.find(a => a.id === anchorId);
         const map = mapRef.current;
         if (anchor && map) {
-            const _oldLatLng = L.latLng(anchor.latlng.lat, anchor.latlng.lng);
+            const _oldLatLng = createLatLngLiteral(anchor.latlng);
             let _handle1OffsetPixels = undefined;
             let _handle2OffsetPixels = undefined;
             try {
@@ -340,16 +340,16 @@ const App = () => {
         const newLatLngLiteral = targetMarker.getLatLng().wrap();
         setCurrentAnchors(prev => prev.map(a => {
             if (a.id === anchorId && map && a._oldLatLng) { // Ensure _oldLatLng is present from dragstart
-                const updatedAnchorPart = { latlng: { lat: newLatLngLiteral.lat, lng: newLatLngLiteral.lng }, handle1: a.handle1, handle2: a.handle2 };
+                const updatedAnchorPart = createArrowAnchorData({ latlng: createLatLngLiteral(newLatLngLiteral), handle1: a.handle1, handle2: a.handle2 });
                 try {
                     const newAnchorPoint = map.latLngToLayerPoint(newLatLngLiteral);
                     if (a.handle1 && a._handle1OffsetPixels) {
                         const newHandle1GeomPoint = pointAdd(newAnchorPoint, a._handle1OffsetPixels);
-                        updatedAnchorPart.handle1 = map.layerPointToLatLng(L.point(newHandle1GeomPoint.x, newHandle1GeomPoint.y)).wrap();
+                        updatedAnchorPart.handle1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newHandle1GeomPoint.x, newHandle1GeomPoint.y)).wrap());
                     }
                     if (a.handle2 && a._handle2OffsetPixels) {
                         const newHandle2GeomPoint = pointAdd(newAnchorPoint, a._handle2OffsetPixels);
-                        updatedAnchorPart.handle2 = map.layerPointToLatLng(L.point(newHandle2GeomPoint.x, newHandle2GeomPoint.y)).wrap();
+                        updatedAnchorPart.handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newHandle2GeomPoint.x, newHandle2GeomPoint.y)).wrap());
                     }
                 }
                 catch (err) {
@@ -370,8 +370,8 @@ const App = () => {
         setCurrentAnchors(prev => prev.map(a => {
             if (a.id === anchorId) {
                 const updatedAnchorPart = (handleNum === 1)
-                    ? { handle1: { lat: newHandleLatLngLiteral.lat, lng: newHandleLatLngLiteral.lng } }
-                    : { handle2: { lat: newHandleLatLngLiteral.lat, lng: newHandleLatLngLiteral.lng } };
+                    ? { handle1: createLatLngLiteral(newHandleLatLngLiteral) }
+                    : { handle2: createLatLngLiteral(newHandleLatLngLiteral) };
                 return { ...a, ...updatedAnchorPart };
             }
             return a;
@@ -386,11 +386,11 @@ const App = () => {
         arrowLayerRef.current?.eachLayer(layer => {
             const arrowGroup = layer;
             if (arrowGroup.savedAnchors && arrowGroup.arrowParameters) {
-                currentFinalizedArrows.push({
+                currentFinalizedArrows.push(createPersistedArrow({
                     savedAnchors: JSON.parse(JSON.stringify(arrowGroup.savedAnchors)),
                     arrowParameters: JSON.parse(JSON.stringify(arrowGroup.arrowParameters)),
                     arrowName: arrowGroup.arrowName,
-                });
+                }));
             }
         });
         setSavedArrowsBackup(currentFinalizedArrows);
@@ -403,22 +403,18 @@ const App = () => {
             setCurrentAnchors([]);
             return null;
         }
-        const anchorsToSave = getAnchorsData().map(a => ({
-            latlng: a.latlng,
-            handle1: a.handle1 || null,
-            handle2: a.handle2 || null,
-        }));
+        const anchorsToSave = getAnchorsData().map((a) => createArrowAnchorData(a));
         let sThicknessPx = currentShaftThicknessPixels ?? 0;
         let ahLengthPx = currentArrowHeadLengthPixels ?? 0;
         let ahWidthPx = currentArrowHeadWidthPixels ?? 0;
 
         const baseZoom = currentParamsBaseZoom ?? map.getZoom();
-        const finalArrowParams = {
+        const finalArrowParams = createArrowParameters({
             shaftThicknessPixels: sThicknessPx,
             arrowHeadLengthPixels: ahLengthPx,
             arrowHeadWidthPixels: ahWidthPx,
             baseZoom
-        };
+        });
         const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, getAnchorsData());
         if (pts.length < 2) {
             console.error("Finalize: Invalid points for geometry.");
@@ -497,11 +493,7 @@ const App = () => {
         if (!map)
             return;
         savedArrowsBackup.forEach(arrowData => {
-            const anchorsDataForGeom = arrowData.savedAnchors.map(sa => ({
-                latlng: sa.latlng,
-                handle1: sa.handle1 || null,
-                handle2: sa.handle2 || null
-            }));
+            const anchorsDataForGeom = arrowData.savedAnchors.map((sa) => createArrowAnchorData(sa));
             const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsDataForGeom);
             if (pts.length < 2 || arrowData.arrowParameters.shaftThicknessPixels === null || arrowData.arrowParameters.arrowHeadLengthPixels === null || arrowData.arrowParameters.arrowHeadWidthPixels === null)
                 return;
@@ -571,12 +563,12 @@ const App = () => {
         if (!map || editingState === EditingState.Idle || currentAnchors.length < 2)
             return;
         const currentAnchorsDataToCopy = getAnchorsData();
-        const currentPixelParams = {
+        const currentPixelParams = createArrowParameters({
             shaftThicknessPixels: currentShaftThicknessPixels,
             arrowHeadLengthPixels: currentArrowHeadLengthPixels,
             arrowHeadWidthPixels: currentArrowHeadWidthPixels,
             baseZoom: currentParamsBaseZoom,
-        };
+        });
         const currentNameVal = currentArrowName;
         handleConfirm(false);
         setEditingState(EditingState.DrawingNew);
@@ -596,20 +588,20 @@ const App = () => {
             const newId = Date.now().toString() + Math.random().toString() + `_copy_${i}`;
             const currentAnchorPt = map.latLngToLayerPoint(L.latLng(aData.latlng.lat, aData.latlng.lng));
             const newGeomPt = pointAdd(currentAnchorPt, offset);
-            const newLatLng = map.layerPointToLatLng(L.point(newGeomPt.x, newGeomPt.y)).wrap();
+            const newLatLng = createLatLngLiteral(map.layerPointToLatLng(L.point(newGeomPt.x, newGeomPt.y)).wrap());
             let newH1 = undefined;
             if (aData.handle1) {
                 const currentH1Pt = map.latLngToLayerPoint(L.latLng(aData.handle1.lat, aData.handle1.lng));
                 const newH1GeomPt = pointAdd(currentH1Pt, offset);
-                newH1 = map.layerPointToLatLng(L.point(newH1GeomPt.x, newH1GeomPt.y)).wrap();
+                newH1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newH1GeomPt.x, newH1GeomPt.y)).wrap());
             }
             let newH2 = undefined;
             if (aData.handle2) {
                 const currentH2Pt = map.latLngToLayerPoint(L.latLng(aData.handle2.lat, aData.handle2.lng));
                 const newH2GeomPt = pointAdd(currentH2Pt, offset);
-                newH2 = map.layerPointToLatLng(L.point(newH2GeomPt.x, newH2GeomPt.y)).wrap();
+                newH2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newH2GeomPt.x, newH2GeomPt.y)).wrap());
             }
-            return { id: newId, latlng: newLatLng, handle1: newH1, handle2: newH2 };
+            return createArrowAnchorEntity({ id: newId, latlng: newLatLng, handle1: newH1, handle2: newH2 });
         });
         setCurrentAnchors(copiedAnchors);
         setCurrentShaftThicknessPixels(currentPixelParams.shaftThicknessPixels);
@@ -672,12 +664,12 @@ const App = () => {
             ahLengthPx = ahLengthPx ?? 0;
             ahWidthPx = ahWidthPx ?? 0;
         }
-        const feature = generateGeoJsonForArrowForMap(getAnchorsData(), {
+        const feature = generateGeoJsonForArrowForMap(getAnchorsData(), createArrowParameters({
             shaftThicknessPixels: sThicknessPx,
             arrowHeadLengthPixels: ahLengthPx,
             arrowHeadWidthPixels: ahWidthPx,
             baseZoom: currentParamsBaseZoom ?? (mapRef.current ? mapRef.current.getZoom() : 0)
-        }, currentArrowName);
+        }), currentArrowName);
         if (feature) {
             const jsonString = JSON.stringify(feature, null, 2);
             navigator.clipboard.writeText(jsonString)
@@ -700,11 +692,7 @@ const App = () => {
         arrowLayerRef.current?.eachLayer(layer => {
             const arrowGroup = layer;
             if (arrowGroup.savedAnchors && arrowGroup.arrowParameters) {
-                const anchorsForGeoJson = arrowGroup.savedAnchors.map(sa => ({
-                    latlng: sa.latlng,
-                    handle1: sa.handle1,
-                    handle2: sa.handle2,
-                }));
+                const anchorsForGeoJson = arrowGroup.savedAnchors.map((sa) => createArrowAnchorData(sa));
                 const feature = generateGeoJsonForArrowForMap(anchorsForGeoJson, arrowGroup.arrowParameters, arrowGroup.arrowName);
                 if (feature)
                     features.push(feature);
