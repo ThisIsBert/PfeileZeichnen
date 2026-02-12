@@ -277,7 +277,58 @@ export function getValidPointsAndLength(map, anchorArray) {
         centerline,
     };
 }
-export function calculateArrowOutlinePoints(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx) {
+function toLegacyCenterline(pts, totalLength, cumLengths) {
+    if (!Array.isArray(pts) || pts.length < 2) {
+        return null;
+    }
+    const lengths = Array.isArray(cumLengths) && cumLengths.length === pts.length
+        ? cumLengths
+        : computeCumulativeLengths(pts);
+    const inferredTotalLength = Number.isFinite(totalLength) ? totalLength : lengths[lengths.length - 1];
+    const samples = [];
+    let prevNormal = null;
+    for (let i = 0; i < pts.length; i++) {
+        const curr = pts[i];
+        const prev = i > 0 ? pts[i - 1] : null;
+        const next = i < pts.length - 1 ? pts[i + 1] : null;
+        const tangentVec = next && prev
+            ? pointSubtract(next, prev)
+            : next
+                ? pointSubtract(next, curr)
+                : prev
+                    ? pointSubtract(curr, prev)
+                    : { x: 1, y: 0 };
+        const tangent = pointLength(tangentVec) > 1e-9 ? normalize(tangentVec) : { x: 1, y: 0 };
+        const normal = stableNormalFromTangent(tangent, prevNormal);
+        const sample = {
+            segIndex: Math.max(0, Math.min(i, pts.length - 2)),
+            t: i,
+            s: lengths[i] ?? 0,
+            pt: curr,
+            tangent,
+            normal,
+        };
+        samples.push(sample);
+        prevNormal = normal;
+    }
+    return {
+        segments: [],
+        samples,
+        points: pts,
+        cumLengths: lengths,
+        totalLength: Math.max(inferredTotalLength, lengths[lengths.length - 1] ?? 0),
+        validCurveData: samples.map(sample => ({ pt: sample.pt, segIndex: sample.segIndex })),
+    };
+}
+export function calculateArrowOutlinePoints(centerlineOrPts, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx, legacyHeadWidthPx, legacyHeadLengthPx) {
+    let centerline = centerlineOrPts;
+    if (Array.isArray(centerlineOrPts)) {
+        centerline = toLegacyCenterline(centerlineOrPts, rearWidthPx, neckWidthPx);
+        rearWidthPx = headWidthPx;
+        neckWidthPx = headLengthPx;
+        headWidthPx = legacyHeadWidthPx;
+        headLengthPx = legacyHeadLengthPx;
+    }
     if (!centerline || centerline.points.length < 2 || centerline.totalLength <= 1e-6) {
         return null;
     }
