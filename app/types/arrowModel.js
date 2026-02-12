@@ -33,9 +33,10 @@
 
 /**
  * @typedef {{
- *   shaftThicknessPixels: number | null,
- *   arrowHeadLengthPixels: number | null,
- *   arrowHeadWidthPixels: number | null,
+ *   rearWidthPx: number | null,
+ *   neckWidthPx: number | null,
+ *   headWidthPx: number | null,
+ *   headLengthPx: number | null,
  *   baseZoom: number | null
  * }} ArrowParameters
  */
@@ -93,10 +94,21 @@ export function createArrowAnchorData(value) {
 export function createArrowParameters(value) {
   const data = value ?? {};
   const getNumberOrNull = (input) => (typeof input === 'number' && Number.isFinite(input) ? input : null);
+
+  const legacyShaftThickness = getNumberOrNull(data.shaftThicknessPixels);
+  const legacyHeadLength = getNumberOrNull(data.arrowHeadLengthPixels);
+  const legacyHeadWidth = getNumberOrNull(data.arrowHeadWidthPixels);
+
+  const rearWidthPx = getNumberOrNull(data.rearWidthPx) ?? legacyShaftThickness;
+  const neckWidthPx = getNumberOrNull(data.neckWidthPx) ?? legacyShaftThickness;
+  const headWidthPx = getNumberOrNull(data.headWidthPx) ?? legacyHeadWidth;
+  const headLengthPx = getNumberOrNull(data.headLengthPx) ?? legacyHeadLength;
+
   return {
-    shaftThicknessPixels: getNumberOrNull(data.shaftThicknessPixels),
-    arrowHeadLengthPixels: getNumberOrNull(data.arrowHeadLengthPixels),
-    arrowHeadWidthPixels: getNumberOrNull(data.arrowHeadWidthPixels),
+    rearWidthPx,
+    neckWidthPx,
+    headWidthPx,
+    headLengthPx,
     baseZoom: getNumberOrNull(data.baseZoom),
   };
 }

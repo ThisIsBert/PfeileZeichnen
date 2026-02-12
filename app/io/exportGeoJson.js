@@ -4,7 +4,7 @@ import { getValidPointsAndLength, calculateArrowOutlinePoints } from '../geometr
 /**
  * @param {import('leaflet').Map} map
  * @param {Array<{latlng:any,handle1?:any,handle2?:any}>} anchorsData
- * @param {{shaftThicknessPixels:number|null,arrowHeadLengthPixels:number|null,arrowHeadWidthPixels:number|null,baseZoom:number|null}} params
+ * @param {{rearWidthPx:number|null,neckWidthPx:number|null,headWidthPx:number|null,headLengthPx:number|null,baseZoom:number|null}} params
  * @param {string} name
  */
 export function generateGeoJsonForArrow(map, anchorsData, params, name) {
@@ -13,16 +13,18 @@ export function generateGeoJsonForArrow(map, anchorsData, params, name) {
   const { pts, totalLength, cumLengths } = getValidPointsAndLength(map, anchorsData);
   if (pts.length < 2) return null;
 
-  let sTP = params.shaftThicknessPixels ?? 0;
-  let aHLP = params.arrowHeadLengthPixels ?? 0;
-  let aHWP = params.arrowHeadWidthPixels ?? 0;
+  let rearWidthPx = params.rearWidthPx ?? 0;
+  let neckWidthPx = params.neckWidthPx ?? 0;
+  let headWidthPx = params.headWidthPx ?? 0;
+  let headLengthPx = params.headLengthPx ?? 0;
 
   const scale = params.baseZoom !== null ? map.getZoomScale(map.getZoom(), params.baseZoom) : 1;
-  sTP *= scale;
-  aHLP *= scale;
-  aHWP *= scale;
+  rearWidthPx *= scale;
+  neckWidthPx *= scale;
+  headWidthPx *= scale;
+  headLengthPx *= scale;
 
-  const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, sTP, aHLP, aHWP);
+  const outlinePoints = calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
   if (!outlinePoints) return null;
 
   try {

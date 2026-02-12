@@ -105,114 +105,73 @@ export function getValidPointsAndLength(map, anchorArray) {
     const totalLength = cumLengths.length > 0 ? cumLengths[cumLengths.length - 1] : 0;
     return { pts, totalLength, cumLengths, validCurveData };
 }
-export function calculateArrowOutlinePoints(pts, // These are our Point type
-totalLength, cumLengths, shaftThicknessPx, arrowHeadLengthPx, arrowHeadWidthPx) {
+export function calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx) {
     if (!pts || pts.length < 2 || totalLength <= 1e-6) {
         return null;
     }
-    arrowHeadLengthPx = Math.min(arrowHeadLengthPx, totalLength);
-    shaftThicknessPx = Math.max(0, shaftThicknessPx);
-    arrowHeadWidthPx = Math.max(0, arrowHeadWidthPx);
+    rearWidthPx = Math.max(0, rearWidthPx);
+    neckWidthPx = Math.max(0, neckWidthPx);
+    headWidthPx = Math.max(0, headWidthPx);
+    headLengthPx = Math.max(0, Math.min(headLengthPx, totalLength));
     const tip = pts[pts.length - 1];
-    const headBaseTargetCum = Math.max(0, totalLength - arrowHeadLengthPx);
-    let basePt = interpolatePoint(pts, cumLengths, headBaseTargetCum);
-    let leftBase = basePt, rightBase = basePt;
+    const neckTargetCum = Math.max(0, totalLength - headLengthPx);
+    const neckPoint = interpolatePoint(pts, cumLengths, neckTargetCum);
     let tipTangent = { x: 1, y: 0 };
-    const headExists = arrowHeadLengthPx > 1e-6 && arrowHeadWidthPx > 1e-6 && pointLength(pointSubtract(tip, basePt)) > 1e-6;
-    if (headExists) {
-        const tangentPtBeforeTip = interpolatePoint(pts, cumLengths, Math.max(0, totalLength - 0.1));
-        tipTangent = normalize(pointSubtract(tip, tangentPtBeforeTip));
-        if (tipTangent.x === 0 && tipTangent.y === 0) {
-            let pIdx = pts.length - 2;
-            while (pIdx >= 0 && pointLength(pointSubtract(tip, pts[pIdx])) < 1e-6)
-                pIdx--;
-            if (pIdx >= 0)
-                tipTangent = normalize(pointSubtract(tip, pts[pIdx]));
-            else
-                tipTangent = { x: 1, y: 0 };
-        }
-        const perp = normalize(perpendicular(tipTangent));
-        leftBase = pointAdd(basePt, pointMultiply(perp, arrowHeadWidthPx / 2));
-        rightBase = pointSubtract(basePt, pointMultiply(perp, arrowHeadWidthPx / 2));
-    }
-    else {
-        basePt = tip;
-        leftBase = tip;
-        rightBase = tip;
-        if (pts.length >= 2) {
-            let pIdx = pts.length - 2;
-            while (pIdx >= 0 && pointLength(pointSubtract(tip, pts[pIdx])) < 1e-6)
-                pIdx--;
-            if (pIdx >= 0)
-                tipTangent = normalize(pointSubtract(tip, pts[pIdx]));
-            else
-                tipTangent = { x: 1, y: 0 };
+    for (let pIdx = pts.length - 2; pIdx >= 0; pIdx--) {
+        const diff = pointSubtract(tip, pts[pIdx]);
+        if (pointLength(diff) > 1e-6) {
+            tipTangent = normalize(diff);
+            break;
         }
     }
+    if (tipTangent.x === 0 && tipTangent.y === 0) {
+        tipTangent = { x: 1, y: 0 };
+    }
+    const neckPerp = normalize(perpendicular(tipTangent));
+    const leftHeadBase = pointAdd(neckPoint, pointMultiply(neckPerp, headWidthPx / 2));
+    const rightHeadBase = pointSubtract(neckPoint, pointMultiply(neckPerp, headWidthPx / 2));
     const leftShaft = [];
     const rightShaft = [];
-    const shaftExists = headBaseTargetCum > 1e-6 && shaftThicknessPx > 1e-6;
-    if (shaftExists) {
-        const shaftPts = [];
-        for (let i = 0; i < pts.length; i++) {
-            if (cumLengths[i] <= headBaseTargetCum + 1e-9) {
-                if (shaftPts.length === 0 || pointLength(pointSubtract(pts[i], shaftPts[shaftPts.length - 1])) > 1e-6) {
-                    shaftPts.push(pts[i]);
-                }
-            }
-            else {
-                break;
+    const shaftPoints = [];
+    for (let i = 0; i < pts.length; i++) {
+        if (cumLengths[i] <= neckTargetCum + 1e-9) {
+            if (shaftPoints.length === 0 || pointLength(pointSubtract(pts[i], shaftPoints[shaftPoints.length - 1])) > 1e-6) {
+                shaftPoints.push(pts[i]);
             }
         }
-        const shaftEndBasePt = interpolatePoint(pts, cumLengths, headBaseTargetCum);
-        if (shaftPts.length === 0 || pointLength(pointSubtract(shaftEndBasePt, shaftPts[shaftPts.length - 1])) > 1e-6) {
-            shaftPts.push(shaftEndBasePt);
+        else {
+            break;
         }
-        if (shaftPts.length >= 2) {
-            for (let i = 0; i < shaftPts.length; i++) {
-                const p = shaftPts[i];
-                let tangent = { x: 1, y: 0 };
-                if (i === 0 && shaftPts.length > 1) {
-                    let nextIdx = 1;
-                    while (nextIdx < shaftPts.length && pointLength(pointSubtract(shaftPts[nextIdx], shaftPts[0])) < 1e-6)
-                        nextIdx++;
-                    if (nextIdx < shaftPts.length)
-                        tangent = normalize(pointSubtract(shaftPts[nextIdx], shaftPts[0]));
-                }
-                else if (i === shaftPts.length - 1) {
-                    tangent = tipTangent;
-                    if ((tangent.x === 0 && tangent.y === 0) && i > 0) {
-                        let prevIdx = i - 1;
-                        while (prevIdx >= 0 && pointLength(pointSubtract(shaftPts[i], shaftPts[prevIdx])) < 1e-6)
-                            prevIdx--;
-                        if (prevIdx >= 0)
-                            tangent = normalize(pointSubtract(shaftPts[i], shaftPts[prevIdx]));
-                    }
-                }
-                else {
-                    let prevIdx = i - 1;
-                    while (prevIdx >= 0 && pointLength(pointSubtract(shaftPts[i], shaftPts[prevIdx])) < 1e-6)
-                        prevIdx--;
-                    let nextIdx = i + 1;
-                    while (nextIdx < shaftPts.length && pointLength(pointSubtract(shaftPts[nextIdx], shaftPts[i])) < 1e-6)
-                        nextIdx++;
-                    if (prevIdx >= 0 && nextIdx < shaftPts.length) {
-                        tangent = normalize(pointSubtract(shaftPts[nextIdx], shaftPts[prevIdx]));
-                    }
-                    else if (nextIdx < shaftPts.length) {
-                        tangent = normalize(pointSubtract(shaftPts[nextIdx], shaftPts[i]));
-                    }
-                    else if (prevIdx >= 0) {
-                        tangent = normalize(pointSubtract(shaftPts[i], shaftPts[prevIdx]));
-                    }
-                }
-                if (tangent.x === 0 && tangent.y === 0)
-                    tangent = { x: 1, y: 0 };
-                const perpT = normalize(perpendicular(tangent));
-                leftShaft.push(pointAdd(p, pointMultiply(perpT, shaftThicknessPx / 2)));
-                rightShaft.push(pointSubtract(p, pointMultiply(perpT, shaftThicknessPx / 2)));
-            }
+    }
+    if (shaftPoints.length === 0 || pointLength(pointSubtract(neckPoint, shaftPoints[shaftPoints.length - 1])) > 1e-6) {
+        shaftPoints.push(neckPoint);
+    }
+    if (shaftPoints.length < 2) {
+        shaftPoints.unshift(pts[0]);
+    }
+    const shaftCumLengths = computeCumulativeLengths(shaftPoints);
+    const neckLength = Math.max(shaftCumLengths[shaftCumLengths.length - 1] ?? neckTargetCum, 1e-6);
+    for (let i = 0; i < shaftPoints.length; i++) {
+        const p = shaftPoints[i];
+        let tangent = { ...tipTangent };
+        if (i === 0 && shaftPoints.length > 1) {
+            tangent = normalize(pointSubtract(shaftPoints[1], shaftPoints[0]));
         }
+        else if (i > 0 && i < shaftPoints.length - 1) {
+            tangent = normalize(pointSubtract(shaftPoints[i + 1], shaftPoints[i - 1]));
+        }
+        else if (i > 0) {
+            tangent = normalize(pointSubtract(shaftPoints[i], shaftPoints[i - 1]));
+        }
+        if (tangent.x === 0 && tangent.y === 0) {
+            tangent = { x: 1, y: 0 };
+        }
+        const perpT = normalize(perpendicular(tangent));
+        const shaftS = Math.min(neckLength, Math.max(0, shaftCumLengths[i] ?? 0));
+        const t = neckLength > 1e-6 ? shaftS / neckLength : 1;
+        const halfWidth = ((rearWidthPx + (neckWidthPx - rearWidthPx) * t) / 2);
+        leftShaft.push(pointAdd(p, pointMultiply(perpT, halfWidth)));
+        rightShaft.push(pointSubtract(p, pointMultiply(perpT, halfWidth)));
     }
     const mergedOutlinePoints = [];
     const MIN_DIST_SQ = 1e-12;
@@ -221,66 +180,29 @@ totalLength, cumLengths, shaftThicknessPx, arrowHeadLengthPx, arrowHeadWidthPx) 
             return;
         if (mergedOutlinePoints.length === 0) {
             mergedOutlinePoints.push(point);
+            return;
         }
-        else {
-            const lastPt = mergedOutlinePoints[mergedOutlinePoints.length - 1];
-            const dx = point.x - lastPt.x;
-            const dy = point.y - lastPt.y;
-            if ((dx * dx + dy * dy) > MIN_DIST_SQ) {
-                mergedOutlinePoints.push(point);
-            }
-        }
-    }
-    if (shaftExists && leftShaft.length > 0) {
-        for (let i = 0; i < leftShaft.length; i++) {
-            addPointIfNotDuplicate(leftShaft[i]);
+        const lastPt = mergedOutlinePoints[mergedOutlinePoints.length - 1];
+        const dx = point.x - lastPt.x;
+        const dy = point.y - lastPt.y;
+        if ((dx * dx + dy * dy) > MIN_DIST_SQ) {
+            mergedOutlinePoints.push(point);
         }
     }
-    if (headExists) {
-        addPointIfNotDuplicate(leftBase);
-        addPointIfNotDuplicate(tip);
-        addPointIfNotDuplicate(rightBase);
+    for (let i = 0; i < leftShaft.length; i++) {
+        addPointIfNotDuplicate(leftShaft[i]);
     }
-    else if (!shaftExists) {
-        if (arrowHeadWidthPx > 1e-6 && arrowHeadLengthPx > 1e-6) {
-            const p_start = pts[0];
-            const p_end = pts[pts.length - 1];
-            const dir = normalize(pointSubtract(p_end, p_start));
-            const perp_dir = perpendicular(dir);
-            const triangle_base_center = pointSubtract(p_end, pointMultiply(dir, arrowHeadLengthPx));
-            addPointIfNotDuplicate(pointAdd(triangle_base_center, pointMultiply(perp_dir, arrowHeadWidthPx / 2)));
-            addPointIfNotDuplicate(p_end);
-            addPointIfNotDuplicate(pointSubtract(triangle_base_center, pointMultiply(perp_dir, arrowHeadWidthPx / 2)));
-        }
-        else {
-            return null;
-        }
-    }
-    if (shaftExists && rightShaft.length > 0) {
-        for (let i = rightShaft.length - 1; i >= 0; i--) {
-            addPointIfNotDuplicate(rightShaft[i]);
-        }
+    addPointIfNotDuplicate(leftHeadBase);
+    addPointIfNotDuplicate(tip);
+    addPointIfNotDuplicate(rightHeadBase);
+    for (let i = rightShaft.length - 1; i >= 0; i--) {
+        addPointIfNotDuplicate(rightShaft[i]);
     }
     if (mergedOutlinePoints.length > 0) {
-        const firstPt = mergedOutlinePoints[0];
-        addPointIfNotDuplicate(firstPt);
+        addPointIfNotDuplicate(mergedOutlinePoints[0]);
     }
-    if (mergedOutlinePoints.length < 4 && !(headExists && !shaftExists && mergedOutlinePoints.length === 3)) {
-        console.warn("Calculated outline has too few points (< 4):", mergedOutlinePoints.length, mergedOutlinePoints);
-        if (headExists && !shaftExists && mergedOutlinePoints.length === 3) {
-            if (mergedOutlinePoints.length < 4) {
-                console.error("Failed to close triangle outline properly.");
-                return null;
-            }
-        }
-        else if (!headExists && !shaftExists) {
-            console.warn("No head and no shaft resulted in no points.");
-            return null;
-        }
-        else {
-            console.error("Merged outline invalid (< 4 points).");
-            return null;
-        }
+    if (mergedOutlinePoints.length < 4) {
+        return null;
     }
     return mergedOutlinePoints;
 }
