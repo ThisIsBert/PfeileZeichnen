@@ -29,9 +29,9 @@ export function insertAnchorWithAlignedHandles(map, prevAnchors, newAnchorLatLng
       if (len > 1e-6) {
         const offsetVec = pointMultiply(vec, HANDLE_OFFSET_ON_LINE_PIXELS / len);
         const prevAnchorH2Pos = pointAdd(pPrev, offsetVec);
-        prevAnchor.handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(prevAnchorH2Pos.x, prevAnchorH2Pos.y)).wrap());
+        prevAnchor.handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(prevAnchorH2Pos.x, prevAnchorH2Pos.y)));
         const newAnchorH1Pos = pointSubtract(pNew, offsetVec);
-        updatedAnchors[index].handle1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newAnchorH1Pos.x, newAnchorH1Pos.y)).wrap());
+        updatedAnchors[index].handle1 = createLatLngLiteral(map.layerPointToLatLng(L.point(newAnchorH1Pos.x, newAnchorH1Pos.y)));
       }
     } catch (e) {
       console.error('Error aligning previous segment handles:', e);
@@ -48,9 +48,9 @@ export function insertAnchorWithAlignedHandles(map, prevAnchors, newAnchorLatLng
       if (len > 1e-6) {
         const offsetVec = pointMultiply(vec, HANDLE_OFFSET_ON_LINE_PIXELS / len);
         const newAnchorH2Pos = pointAdd(pNew, offsetVec);
-        updatedAnchors[index].handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newAnchorH2Pos.x, newAnchorH2Pos.y)).wrap());
+        updatedAnchors[index].handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newAnchorH2Pos.x, newAnchorH2Pos.y)));
         const nextAnchorH1Pos = pointSubtract(pNext, offsetVec);
-        nextAnchor.handle1 = createLatLngLiteral(map.layerPointToLatLng(L.point(nextAnchorH1Pos.x, nextAnchorH1Pos.y)).wrap());
+        nextAnchor.handle1 = createLatLngLiteral(map.layerPointToLatLng(L.point(nextAnchorH1Pos.x, nextAnchorH1Pos.y)));
       }
     } catch (e) {
       console.error('Error aligning next segment handles:', e);
