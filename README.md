@@ -15,6 +15,10 @@ No bundling or build step is required.
 
 Push static files directly to the default branch / Pages root. There is no compile phase.
 
+## Runtime dependencies
+
+Runtime CDN imports are pinned and documented in `DEPENDENCIES.md`.
+
 ## Static checks
 
 Run static checks locally:
