@@ -933,12 +933,38 @@ const App = () => {
             }
         });
     }, [currentAnchors, editingState, removeAnchor, handleAnchorDragStart, handleAnchorDrag, handleAnchorDragEnd, handleGenericDragStart, handleHandleDrag, handleGenericDragEnd]);
-    // Control panel props
+    // Control panel contract
     const canEditParameters = getCanEditParameters(editingState) && currentAnchors.length >= 2;
     const canCopyCurrentArrow = isEditing(editingState) && currentAnchors.length >= 2;
     const canDeleteArrow = getCanDeleteArrow(editingState, selectedArrowGroup !== null);
     const canCopyGeoJsonCurrent = canEditParameters;
     const canSaveAllGeoJsonExport = getCanSaveAllGeoJson(editingState, arrowLayerRef.current?.getLayers().length ?? 0);
-    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { editingState: editingState, onDrawArrow: handleDrawArrow, onCopyArrow: handleCopyArrow, canCopyArrow: canCopyCurrentArrow, onDeleteArrow: handleDeleteSelectedArrow, canDeleteArrow: canDeleteArrow, shaftThicknessFactor: currentShaftThicknessFactor, onShaftThicknessChange: handleShaftThicknessChange, arrowHeadLengthFactor: currentArrowHeadLengthFactor, onArrowHeadLengthChange: handleArrowHeadLengthChange, arrowHeadWidthFactor: currentArrowHeadWidthFactor, onArrowHeadWidthChange: handleArrowHeadWidthChange, canEditParameters: canEditParameters, arrowName: currentArrowName, onArrowNameChange: setCurrentArrowName, canEditName: editingState !== EditingState.Idle, onCopyGeoJson: handleCopyGeoJson, canCopyGeoJson: canCopyGeoJsonCurrent, onSaveAllGeoJson: handleSaveAllGeoJson, canSaveAllGeoJson: canSaveAllGeoJsonExport, onConfirm: () => handleConfirm(true), onCancel: handleCancel })] }));
+    const controlPanelUiState = {
+        editingState,
+        canCopyArrow: canCopyCurrentArrow,
+        canDeleteArrow,
+        shaftThicknessFactor: currentShaftThicknessFactor,
+        arrowHeadLengthFactor: currentArrowHeadLengthFactor,
+        arrowHeadWidthFactor: currentArrowHeadWidthFactor,
+        canEditParameters,
+        arrowName: currentArrowName,
+        canEditName: editingState !== EditingState.Idle,
+        canCopyGeoJson: canCopyGeoJsonCurrent,
+        canSaveAllGeoJson: canSaveAllGeoJsonExport,
+    };
+    const controlPanelActions = {
+        onDrawArrow: handleDrawArrow,
+        onCopyArrow: handleCopyArrow,
+        onDeleteArrow: handleDeleteSelectedArrow,
+        onShaftThicknessChange: handleShaftThicknessChange,
+        onArrowHeadLengthChange: handleArrowHeadLengthChange,
+        onArrowHeadWidthChange: handleArrowHeadWidthChange,
+        onArrowNameChange: setCurrentArrowName,
+        onCopyGeoJson: handleCopyGeoJson,
+        onSaveAllGeoJson: handleSaveAllGeoJson,
+        onConfirm: () => handleConfirm(true),
+        onCancel: handleCancel,
+    };
+    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { uiState: controlPanelUiState, actions: controlPanelActions })] }));
 };
 export default App;
