@@ -50,9 +50,10 @@ Persistable anchor payload.
 
 ```js
 {
-  shaftThicknessPixels: 20,
-  arrowHeadLengthPixels: 48,
-  arrowHeadWidthPixels: 36,
+  rearWidthPx: 20,
+  neckWidthPx: 16,
+  headWidthPx: 36,
+  headLengthPx: 48,
   baseZoom: 13
 }
 ```
@@ -69,9 +70,10 @@ Persistable anchor payload.
     }
   ],
   arrowParameters: {
-    shaftThicknessPixels: 20,
-    arrowHeadLengthPixels: 48,
-    arrowHeadWidthPixels: 36,
+    rearWidthPx: 20,
+    neckWidthPx: 16,
+    headWidthPx: 36,
+    headLengthPx: 48,
     baseZoom: 13
   },
   arrowName: 'Unbenannter Pfeil 1'
