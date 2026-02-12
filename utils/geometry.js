@@ -7,12 +7,182 @@ export function pointLength(p) { return Math.sqrt(p.x * p.x + p.y * p.y); }
 export function normalize(p) { const len = pointLength(p); if (len < 1e-9)
     return { x: 0, y: 0 }; return { x: p.x / len, y: p.y / len }; }
 export function perpendicular(p) { return { x: -p.y, y: p.x }; }
+
+const DEBUG_CENTERLINE_GEOMETRY = false;
+function debugCenterlineStation(label, station) {
+    if (!DEBUG_CENTERLINE_GEOMETRY || !station)
+        return;
+    console.debug(`[centerline] ${label}`, {
+        s: station.s,
+        segIndex: station.segIndex,
+        t: station.t,
+        tangent: station.tangent,
+        normal: station.normal,
+    });
+}
 export function cubicBezier(p0, p1, p2, p3, t) {
     const mt = 1 - t;
     return {
         x: mt * mt * mt * p0.x + 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t * p3.x,
         y: mt * mt * mt * p0.y + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y + t * t * t * p3.y
     };
+}
+export function cubicBezierDerivative(p0, p1, p2, p3, t) {
+    const mt = 1 - t;
+    return {
+        x: 3 * mt * mt * (p1.x - p0.x) + 6 * mt * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x),
+        y: 3 * mt * mt * (p1.y - p0.y) + 6 * mt * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y),
+    };
+}
+function cubicFlatness(p0, p1, p2, p3) {
+    const chord = pointSubtract(p3, p0);
+    const chordLen = Math.max(pointLength(chord), 1e-9);
+    const distanceToChord = (pt) => Math.abs((pt.x - p0.x) * chord.y - (pt.y - p0.y) * chord.x) / chordLen;
+    return Math.max(distanceToChord(p1), distanceToChord(p2));
+}
+function adaptiveCubicTValues(p0, p1, p2, p3, tolerance = 1.25, maxDepth = 10) {
+    const ts = [0, 1];
+    function subdivide(a, b, c, d, t0, t1, depth) {
+        if (depth >= maxDepth || cubicFlatness(a, b, c, d) <= tolerance) {
+            return;
+        }
+        const tMid = (t0 + t1) * 0.5;
+        const ab = pointMultiply(pointAdd(a, b), 0.5);
+        const bc = pointMultiply(pointAdd(b, c), 0.5);
+        const cd = pointMultiply(pointAdd(c, d), 0.5);
+        const abc = pointMultiply(pointAdd(ab, bc), 0.5);
+        const bcd = pointMultiply(pointAdd(bc, cd), 0.5);
+        const abcd = pointMultiply(pointAdd(abc, bcd), 0.5);
+        ts.push(tMid);
+        subdivide(a, ab, abc, abcd, t0, tMid, depth + 1);
+        subdivide(abcd, bcd, cd, d, tMid, t1, depth + 1);
+    }
+    subdivide(p0, p1, p2, p3, 0, 1, 0);
+    return Array.from(new Set(ts)).sort((a, b) => a - b);
+}
+function findByDistance(samples, s) {
+    let lo = 0;
+    let hi = samples.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (samples[mid].s < s) {
+            lo = mid + 1;
+        }
+        else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+function tangentWithFallback(segment, t, nearestSampleA, nearestSampleB) {
+    const derivative = cubicBezierDerivative(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
+    if (pointLength(derivative) > 1e-9) {
+        return normalize(derivative);
+    }
+    const eps = 1e-3;
+    const t0 = Math.max(0, t - eps);
+    const t1 = Math.min(1, t + eps);
+    if (t1 > t0) {
+        const p0 = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t0);
+        const p1 = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t1);
+        const d = pointSubtract(p1, p0);
+        if (pointLength(d) > 1e-9) {
+            return normalize(d);
+        }
+    }
+    if (nearestSampleA && nearestSampleB) {
+        const chord = pointSubtract(nearestSampleB.pt, nearestSampleA.pt);
+        if (pointLength(chord) > 1e-9) {
+            return normalize(chord);
+        }
+    }
+    return { x: 1, y: 0 };
+}
+function stableNormalFromTangent(tangent, referenceNormal) {
+    let normal = normalize(perpendicular(tangent));
+    if (normal.x === 0 && normal.y === 0) {
+        normal = referenceNormal ?? { x: 0, y: 1 };
+    }
+    if (referenceNormal && ((normal.x * referenceNormal.x) + (normal.y * referenceNormal.y)) < 0) {
+        normal = pointMultiply(normal, -1);
+    }
+    return normal;
+}
+export function sampleCenterlineAtDistance(centerline, s) {
+    if (!centerline || !centerline.samples || centerline.samples.length === 0) {
+        return null;
+    }
+    const totalLength = centerline.totalLength;
+    const clampedS = Math.max(0, Math.min(s, totalLength));
+    const samples = centerline.samples;
+    const upperIdx = findByDistance(samples, clampedS);
+    const lowerIdx = Math.max(0, upperIdx - 1);
+    const lower = samples[lowerIdx];
+    const upper = samples[Math.min(samples.length - 1, upperIdx)];
+    let segment = centerline.segments[upper.segIndex] ?? centerline.segments[lower.segIndex];
+    if (!segment) {
+        return null;
+    }
+    let t = upper.t;
+    if (upper.s > lower.s + 1e-9 && lower.segIndex === upper.segIndex) {
+        const ratio = (clampedS - lower.s) / (upper.s - lower.s);
+        t = lower.t + (upper.t - lower.t) * ratio;
+        segment = centerline.segments[lower.segIndex] ?? segment;
+    }
+    else if (Math.abs(clampedS - lower.s) < Math.abs(upper.s - clampedS)) {
+        t = lower.t;
+        segment = centerline.segments[lower.segIndex] ?? segment;
+    }
+    const pt = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
+    const tangent = tangentWithFallback(segment, t, lower, upper);
+    const reference = Math.abs(clampedS - lower.s) <= Math.abs(upper.s - clampedS) ? lower.normal : upper.normal;
+    const normal = stableNormalFromTangent(tangent, reference);
+    const station = { s: clampedS, pt, tangent, normal, segIndex: segment.index, t };
+    debugCenterlineStation('sample', station);
+    return station;
+}
+export function buildArrowCenterline(map, currentAnchorsData) {
+    const segments = [];
+    const samples = [];
+    if (!map || !currentAnchorsData || currentAnchorsData.length < 2) {
+        return { segments, samples, points: [], cumLengths: [], totalLength: 0, validCurveData: [] };
+    }
+    for (let i = 1; i < currentAnchorsData.length; i++) {
+        const a0Data = currentAnchorsData[i - 1];
+        const a1Data = currentAnchorsData[i];
+        if (!a0Data?.latlng || !a1Data?.latlng)
+            continue;
+        const p0 = map.latLngToLayerPoint(L.latLng(a0Data.latlng.lat, a0Data.latlng.lng));
+        const cp1 = map.latLngToLayerPoint(a0Data.handle2 ? L.latLng(a0Data.handle2.lat, a0Data.handle2.lng) : L.latLng(a0Data.latlng.lat, a0Data.latlng.lng));
+        const cp2 = map.latLngToLayerPoint(a1Data.handle1 ? L.latLng(a1Data.handle1.lat, a1Data.handle1.lng) : L.latLng(a1Data.latlng.lat, a1Data.latlng.lng));
+        const p3 = map.latLngToLayerPoint(L.latLng(a1Data.latlng.lat, a1Data.latlng.lng));
+        segments.push({ index: i - 1, p0, cp1, cp2, p3 });
+    }
+    let s = 0;
+    let prevSample = null;
+    let prevNormal = null;
+    for (const segment of segments) {
+        const ts = adaptiveCubicTValues(segment.p0, segment.cp1, segment.cp2, segment.p3);
+        for (let idx = 0; idx < ts.length; idx++) {
+            const t = ts[idx];
+            if (samples.length > 0 && idx === 0)
+                continue;
+            const pt = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
+            if (prevSample) {
+                s += pointLength(pointSubtract(pt, prevSample.pt));
+            }
+            const tangent = tangentWithFallback(segment, t, prevSample, null);
+            const normal = stableNormalFromTangent(tangent, prevNormal);
+            const sample = { segIndex: segment.index, t, s, pt, tangent, normal };
+            samples.push(sample);
+            prevSample = sample;
+            prevNormal = normal;
+        }
+    }
+    const points = samples.map(sample => sample.pt);
+    const cumLengths = samples.map(sample => sample.s);
+    const validCurveData = samples.map(sample => ({ pt: sample.pt, segIndex: sample.segIndex }));
+    return { segments, samples, points, cumLengths, totalLength: samples.length > 0 ? samples[samples.length - 1].s : 0, validCurveData };
 }
 export function computeCumulativeLengths(points) {
     const lengths = [0];
@@ -94,81 +264,55 @@ export function computeCurvePoints(map, currentAnchorsData) {
 }
 export function getValidPointsAndLength(map, anchorArray) {
     if (!map)
-        return { pts: [], totalLength: 0, cumLengths: [], validCurveData: [] };
-    const curveData = computeCurvePoints(map, anchorArray);
-    const validCurveData = curveData.filter(d => d && d.pt && isFinite(d.pt.x) && isFinite(d.pt.y) && typeof d.segIndex === 'number');
-    if (validCurveData.length < 2) {
-        return { pts: [], totalLength: 0, cumLengths: [], validCurveData: [] };
+        return { pts: [], totalLength: 0, cumLengths: [], validCurveData: [], centerline: null };
+    const centerline = buildArrowCenterline(map, anchorArray);
+    if (centerline.points.length < 2 || centerline.totalLength <= 1e-9) {
+        return { pts: [], totalLength: 0, cumLengths: [], validCurveData: [], centerline: null };
     }
-    const pts = validCurveData.map(d => d.pt);
-    const cumLengths = computeCumulativeLengths(pts);
-    const totalLength = cumLengths.length > 0 ? cumLengths[cumLengths.length - 1] : 0;
-    return { pts, totalLength, cumLengths, validCurveData };
+    return {
+        pts: centerline.points,
+        totalLength: centerline.totalLength,
+        cumLengths: centerline.cumLengths,
+        validCurveData: centerline.validCurveData,
+        centerline,
+    };
 }
-export function calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx) {
-    if (!pts || pts.length < 2 || totalLength <= 1e-6) {
+export function calculateArrowOutlinePoints(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx) {
+    if (!centerline || centerline.points.length < 2 || centerline.totalLength <= 1e-6) {
         return null;
     }
+    const { points: pts, totalLength } = centerline;
     rearWidthPx = Math.max(0, rearWidthPx);
     neckWidthPx = Math.max(0, neckWidthPx);
     headWidthPx = Math.max(0, headWidthPx);
     headLengthPx = Math.max(0, Math.min(headLengthPx, totalLength));
-    const tip = pts[pts.length - 1];
+    const tipStation = sampleCenterlineAtDistance(centerline, totalLength);
+    const tip = tipStation?.pt ?? pts[pts.length - 1];
     const neckTargetCum = Math.max(0, totalLength - headLengthPx);
-    const neckPoint = interpolatePoint(pts, cumLengths, neckTargetCum);
-    let tipTangent = { x: 1, y: 0 };
-    for (let pIdx = pts.length - 2; pIdx >= 0; pIdx--) {
-        const diff = pointSubtract(tip, pts[pIdx]);
-        if (pointLength(diff) > 1e-6) {
-            tipTangent = normalize(diff);
-            break;
-        }
-    }
-    if (tipTangent.x === 0 && tipTangent.y === 0) {
-        tipTangent = { x: 1, y: 0 };
-    }
-    const neckPerp = normalize(perpendicular(tipTangent));
+    const neckStation = sampleCenterlineAtDistance(centerline, neckTargetCum);
+    const neckPoint = neckStation?.pt ?? pts[pts.length - 1];
+    const neckPerp = neckStation?.normal ?? { x: 0, y: 1 };
     const leftHeadBase = pointAdd(neckPoint, pointMultiply(neckPerp, headWidthPx / 2));
     const rightHeadBase = pointSubtract(neckPoint, pointMultiply(neckPerp, headWidthPx / 2));
     const leftShaft = [];
     const rightShaft = [];
-    const shaftPoints = [];
-    for (let i = 0; i < pts.length; i++) {
-        if (cumLengths[i] <= neckTargetCum + 1e-9) {
-            if (shaftPoints.length === 0 || pointLength(pointSubtract(pts[i], shaftPoints[shaftPoints.length - 1])) > 1e-6) {
-                shaftPoints.push(pts[i]);
-            }
-        }
-        else {
-            break;
-        }
+    const shaftSamples = centerline.samples.filter(sample => sample.s <= neckTargetCum + 1e-9);
+    if (shaftSamples.length === 0 || Math.abs(shaftSamples[shaftSamples.length - 1].s - neckTargetCum) > 1e-6) {
+        const neckSample = sampleCenterlineAtDistance(centerline, neckTargetCum);
+        if (neckSample)
+            shaftSamples.push(neckSample);
     }
-    if (shaftPoints.length === 0 || pointLength(pointSubtract(neckPoint, shaftPoints[shaftPoints.length - 1])) > 1e-6) {
-        shaftPoints.push(neckPoint);
+    if (shaftSamples.length < 2) {
+        const tipSample = sampleCenterlineAtDistance(centerline, totalLength);
+        if (tipSample)
+            shaftSamples.push(tipSample);
     }
-    if (shaftPoints.length < 2) {
-        shaftPoints.unshift(pts[0]);
-    }
-    const shaftCumLengths = computeCumulativeLengths(shaftPoints);
-    const neckLength = Math.max(shaftCumLengths[shaftCumLengths.length - 1] ?? neckTargetCum, 1e-6);
-    for (let i = 0; i < shaftPoints.length; i++) {
-        const p = shaftPoints[i];
-        let tangent = { ...tipTangent };
-        if (i === 0 && shaftPoints.length > 1) {
-            tangent = normalize(pointSubtract(shaftPoints[1], shaftPoints[0]));
-        }
-        else if (i > 0 && i < shaftPoints.length - 1) {
-            tangent = normalize(pointSubtract(shaftPoints[i + 1], shaftPoints[i - 1]));
-        }
-        else if (i > 0) {
-            tangent = normalize(pointSubtract(shaftPoints[i], shaftPoints[i - 1]));
-        }
-        if (tangent.x === 0 && tangent.y === 0) {
-            tangent = { x: 1, y: 0 };
-        }
-        const perpT = normalize(perpendicular(tangent));
-        const shaftS = Math.min(neckLength, Math.max(0, shaftCumLengths[i] ?? 0));
-        const t = neckLength > 1e-6 ? shaftS / neckLength : 1;
+    const neckLength = Math.max(neckTargetCum, 1e-6);
+    for (let i = 0; i < shaftSamples.length; i++) {
+        const sample = shaftSamples[i];
+        const p = sample.pt;
+        const perpT = sample.normal;
+        const t = neckLength > 1e-6 ? Math.min(1, Math.max(0, sample.s / neckLength)) : 1;
         const halfWidth = ((rearWidthPx + (neckWidthPx - rearWidthPx) * t) / 2);
         leftShaft.push(pointAdd(p, pointMultiply(perpT, halfWidth)));
         rightShaft.push(pointSubtract(p, pointMultiply(perpT, halfWidth)));
