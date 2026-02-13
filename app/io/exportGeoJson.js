@@ -1,5 +1,47 @@
 import L from 'leaflet';
-import { getValidPointsAndLength, calculateArrowOutlinePoints } from '../geometry/index.js';
+import {
+  getValidPointsAndLength,
+  calculateArrowOutlinePoints,
+  sampleCenterlineAtDistance,
+} from '../geometry/index.js';
+
+
+const GEOJSON_MAX_SEGMENT_LENGTH_PX = 2;
+
+function buildDenseCenterline(centerline, maxSegmentLengthPx = GEOJSON_MAX_SEGMENT_LENGTH_PX) {
+  if (!centerline || !Array.isArray(centerline.samples) || centerline.samples.length < 2 || maxSegmentLengthPx <= 0) {
+    return centerline;
+  }
+
+  const totalLength = centerline.totalLength ?? 0;
+  if (totalLength <= 1e-9) return centerline;
+
+  const denseSamples = [];
+  const stepCount = Math.max(1, Math.ceil(totalLength / maxSegmentLengthPx));
+
+  for (let i = 0; i <= stepCount; i++) {
+    const distance = Math.min(totalLength, (i / stepCount) * totalLength);
+    const station = sampleCenterlineAtDistance(centerline, distance);
+    if (!station) continue;
+
+    const prev = denseSamples[denseSamples.length - 1];
+    if (prev && Math.hypot(station.pt.x - prev.pt.x, station.pt.y - prev.pt.y) <= 1e-9) {
+      continue;
+    }
+
+    denseSamples.push(station);
+  }
+
+  if (denseSamples.length < 2) return centerline;
+
+  return {
+    ...centerline,
+    samples: denseSamples,
+    points: denseSamples.map((sample) => sample.pt),
+    cumLengths: denseSamples.map((sample) => sample.s),
+    validCurveData: denseSamples.map((sample) => ({ pt: sample.pt, segIndex: sample.segIndex })),
+  };
+}
 
 const GEOJSON_MAX_SEGMENT_LENGTH_PX = 4;
 
@@ -52,8 +94,10 @@ export function generateGeoJsonForArrow(map, anchorsData, params, name) {
   headWidthPx *= scale;
   headLengthPx *= scale;
 
-  const outlinePoints = centerline
-    ? calculateArrowOutlinePoints(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx)
+  const denseCenterline = centerline ? buildDenseCenterline(centerline) : null;
+
+  const outlinePoints = denseCenterline
+    ? calculateArrowOutlinePoints(denseCenterline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx)
     : calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
   if (!outlinePoints) return null;
 
