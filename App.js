@@ -522,6 +522,16 @@ const App = () => {
         resetCurrentPixelValues();
         resetPreviousStationFrames();
     }, [resetCurrentPixelValues, restoreStateFromCancel, resetPreviousStationFrames]);
+    const endEditingSession = useCallback(() => {
+        if (editingState === EditingState.Idle) {
+            return;
+        }
+        if (currentAnchors.length >= 2) {
+            handleConfirm(true);
+            return;
+        }
+        handleCancel();
+    }, [editingState, currentAnchors.length, handleConfirm, handleCancel]);
     const handleDrawArrow = useCallback(() => {
         if (editingState !== EditingState.Idle) {
             handleCancel();
@@ -737,20 +747,37 @@ const App = () => {
         if (!map)
             return;
         const onMapClickHandler = (e) => {
-            if (editingState === EditingState.DrawingNew && !isArrowDraggingRef.current) {
-                addAnchor(e.latlng, currentAnchors.length);
+            if ((editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) && !isArrowDraggingRef.current) {
+                if (editingState === EditingState.DrawingNew && currentAnchors.length < 2) {
+                    addAnchor(e.latlng, currentAnchors.length);
+                    return;
+                }
+                endEditingSession();
             }
         };
-        if (editingState === EditingState.DrawingNew) {
+        if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
             map.on('click', onMapClickHandler);
-            map.getContainer().style.cursor = 'crosshair';
+            map.getContainer().style.cursor = (editingState === EditingState.DrawingNew) ? 'crosshair' : 'default';
         }
         else {
             map.off('click', onMapClickHandler);
             map.getContainer().style.cursor = (editingState === EditingState.EditingSelected) ? 'default' : '';
         }
         return () => { map.off('click', onMapClickHandler); };
-    }, [editingState, currentAnchors.length, addAnchor]);
+    }, [editingState, currentAnchors.length, addAnchor, endEditingSession]);
+    useEffect(() => {
+        const onWindowKeyDown = (event) => {
+            if (event.key !== 'Escape' || editingState === EditingState.Idle) {
+                return;
+            }
+            event.preventDefault();
+            endEditingSession();
+        };
+        window.addEventListener('keydown', onWindowKeyDown);
+        return () => {
+            window.removeEventListener('keydown', onWindowKeyDown);
+        };
+    }, [editingState, endEditingSession]);
    useEffect(() => {
        if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
            updateCurveAndArrowPreview();
@@ -956,8 +983,6 @@ const App = () => {
         onArrowNameChange: setCurrentArrowName,
         onCopyGeoJson: handleCopyGeoJson,
         onSaveAllGeoJson: handleSaveAllGeoJson,
-        onConfirm: () => handleConfirm(true),
-        onCancel: handleCancel,
         onShapeParamChange: handleShapeParamChange,
     };
     return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { uiState: controlPanelUiState, actions: controlPanelActions })] }));
