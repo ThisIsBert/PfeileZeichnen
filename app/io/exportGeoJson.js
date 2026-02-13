@@ -1,6 +1,34 @@
 import L from 'leaflet';
 import { getValidPointsAndLength, calculateArrowOutlinePoints } from '../geometry/index.js';
 
+const GEOJSON_MAX_SEGMENT_LENGTH_PX = 4;
+
+function densifyOutlinePoints(points, maxSegmentLengthPx = GEOJSON_MAX_SEGMENT_LENGTH_PX) {
+  if (!Array.isArray(points) || points.length < 2 || maxSegmentLengthPx <= 0) {
+    return points;
+  }
+
+  const densified = [points[0]];
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const dx = curr.x - prev.x;
+    const dy = curr.y - prev.y;
+    const segmentLength = Math.hypot(dx, dy);
+    const subdivisions = Math.max(1, Math.ceil(segmentLength / maxSegmentLengthPx));
+
+    for (let step = 1; step <= subdivisions; step++) {
+      const t = step / subdivisions;
+      densified.push({
+        x: prev.x + dx * t,
+        y: prev.y + dy * t,
+      });
+    }
+  }
+
+  return densified;
+}
+
 /**
  * @param {import('leaflet').Map} map
  * @param {Array<{latlng:any,handle1?:any,handle2?:any}>} anchorsData
@@ -30,7 +58,8 @@ export function generateGeoJsonForArrow(map, anchorsData, params, name) {
   if (!outlinePoints) return null;
 
   try {
-    const coordinates = [outlinePoints.map((p) => {
+    const smoothOutlinePoints = densifyOutlinePoints(outlinePoints);
+    const coordinates = [smoothOutlinePoints.map((p) => {
       const latLng = map.layerPointToLatLng(L.point(p.x, p.y)).wrap();
       return [latLng.lng, latLng.lat];
     })];
