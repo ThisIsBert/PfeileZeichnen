@@ -9,6 +9,9 @@ export function normalize(p) { const len = pointLength(p); if (len < 1e-9)
 export function perpendicular(p) { return { x: -p.y, y: p.x }; }
 
 const DEBUG_CENTERLINE_GEOMETRY = false;
+const DERIVATIVE_ENTER_THRESHOLD = 1e-7;
+const DERIVATIVE_EXIT_THRESHOLD = 5e-8;
+
 function debugCenterlineStation(label, station) {
     if (!DEBUG_CENTERLINE_GEOMETRY || !station)
         return;
@@ -19,6 +22,11 @@ function debugCenterlineStation(label, station) {
         tangent: station.tangent,
         normal: station.normal,
     });
+}
+function debugCenterlineFallback(label, payload) {
+    if (!DEBUG_CENTERLINE_GEOMETRY)
+        return;
+    console.debug(`[centerline:fallback] ${label}`, payload);
 }
 export function cubicBezier(p0, p1, p2, p3, t) {
     const mt = 1 - t;
@@ -74,33 +82,44 @@ function findByDistance(samples, s) {
     }
     return lo;
 }
-function tangentWithFallback(segment, t, nearestSampleA, nearestSampleB) {
-    const derivative = cubicBezierDerivative(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
-    if (pointLength(derivative) > 1e-9) {
-        return normalize(derivative);
+function tangentWithFallback(segment, t, nearestSampleA, nearestSampleB, context = null) {
+    const preferDerivative = context?.lastMode === 'derivative';
+    const directDerivative = cubicBezierDerivative(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
+    const directMag = pointLength(directDerivative);
+    const directThreshold = preferDerivative ? DERIVATIVE_EXIT_THRESHOLD : DERIVATIVE_ENTER_THRESHOLD;
+    if (directMag > directThreshold) {
+        return { tangent: normalize(directDerivative), mode: 'derivative' };
     }
-    const eps = 1e-3;
-    const t0 = Math.max(0, t - eps);
-    const t1 = Math.min(1, t + eps);
-    if (t1 > t0) {
+    const adaptiveEps = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2];
+    for (const eps of adaptiveEps) {
+        const t0 = Math.max(0, t - eps);
+        const t1 = Math.min(1, t + eps);
+        if (t1 <= t0)
+            continue;
         const p0 = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t0);
         const p1 = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t1);
         const d = pointSubtract(p1, p0);
-        if (pointLength(d) > 1e-9) {
-            return normalize(d);
+        const scaledMag = pointLength(d) / Math.max(1e-9, (t1 - t0));
+        const finiteDiffThreshold = preferDerivative ? DERIVATIVE_EXIT_THRESHOLD : DERIVATIVE_ENTER_THRESHOLD;
+        if (scaledMag > finiteDiffThreshold) {
+            debugCenterlineFallback('finite-diff-derivative', { segIndex: segment.index, t, eps, scaledMag });
+            return { tangent: normalize(d), mode: 'derivative' };
         }
     }
     if (nearestSampleA && nearestSampleB) {
         const chord = pointSubtract(nearestSampleB.pt, nearestSampleA.pt);
         const chordLength = pointLength(chord);
         if (chordLength > 1e-9) {
-            return normalize(chord);
+            debugCenterlineFallback('sample-chord', { segIndex: segment.index, t, chordLength });
+            return { tangent: normalize(chord), mode: 'chord' };
         }
         if (chordLength <= 1e-6) {
-            return null;
+            debugCenterlineFallback('degenerate-chord', { segIndex: segment.index, t, chordLength });
+            return { tangent: null, mode: 'none' };
         }
     }
-    return { x: 1, y: 0 };
+    debugCenterlineFallback('no-valid-tangent', { segIndex: segment.index, t });
+    return { tangent: null, mode: 'none' };
 }
 function stableNormalFromTangent(tangent, referenceNormal) {
     let normal = normalize(perpendicular(tangent));
@@ -112,7 +131,7 @@ function stableNormalFromTangent(tangent, referenceNormal) {
     }
     return normal;
 }
-export function sampleCenterlineAtDistance(centerline, s) {
+export function sampleCenterlineAtDistance(centerline, s, stationContext = null) {
     if (!centerline || !centerline.samples || centerline.samples.length === 0) {
         return null;
     }
@@ -128,20 +147,66 @@ export function sampleCenterlineAtDistance(centerline, s) {
         return null;
     }
     let t = upper.t;
+    let sampledTangentResult = null;
     if (upper.s > lower.s + 1e-9 && lower.segIndex === upper.segIndex) {
         const ratio = (clampedS - lower.s) / (upper.s - lower.s);
         t = lower.t + (upper.t - lower.t) * ratio;
         segment = centerline.segments[lower.segIndex] ?? segment;
+        sampledTangentResult = tangentWithFallback(segment, t, lower, upper, stationContext);
+    }
+    else if (lower.segIndex !== upper.segIndex && upper.s > lower.s + 1e-9) {
+        const ratio = (clampedS - lower.s) / (upper.s - lower.s);
+        const lowerSegment = centerline.segments[lower.segIndex];
+        const upperSegment = centerline.segments[upper.segIndex];
+        const lowerDist = Math.abs(clampedS - lower.s);
+        const upperDist = Math.abs(upper.s - clampedS);
+        const lowerWeight = 1 - ratio;
+        const upperWeight = ratio;
+        const lowerResult = lowerSegment
+            ? tangentWithFallback(lowerSegment, 1, samples[Math.max(0, lowerIdx - 1)], lower, stationContext)
+            : null;
+        const upperResult = upperSegment
+            ? tangentWithFallback(upperSegment, 0, upper, samples[Math.min(samples.length - 1, upperIdx + 1)], stationContext)
+            : null;
+        let blendedTangent = null;
+        if (lowerResult?.tangent && upperResult?.tangent) {
+            const alignedUpper = ((lowerResult.tangent.x * upperResult.tangent.x) + (lowerResult.tangent.y * upperResult.tangent.y)) < 0
+                ? pointMultiply(upperResult.tangent, -1)
+                : upperResult.tangent;
+            blendedTangent = normalize(pointAdd(pointMultiply(lowerResult.tangent, lowerWeight), pointMultiply(alignedUpper, upperWeight)));
+        }
+        sampledTangentResult = blendedTangent && pointLength(blendedTangent) > 1e-9
+            ? { tangent: blendedTangent, mode: 'derivative-blend' }
+            : (lowerDist <= upperDist ? lowerResult : upperResult);
+        t = lowerDist <= upperDist ? 1 : 0;
+        segment = lowerDist <= upperDist ? (lowerSegment ?? segment) : (upperSegment ?? segment);
     }
     else if (Math.abs(clampedS - lower.s) < Math.abs(upper.s - clampedS)) {
         t = lower.t;
         segment = centerline.segments[lower.segIndex] ?? segment;
+        sampledTangentResult = tangentWithFallback(segment, t, lower, upper, stationContext);
+    }
+    if (!sampledTangentResult) {
+        sampledTangentResult = tangentWithFallback(segment, t, lower, upper, stationContext);
     }
     const pt = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
-    const sampledTangent = tangentWithFallback(segment, t, lower, upper);
+    const sampledTangent = sampledTangentResult?.tangent ?? null;
     const reference = Math.abs(clampedS - lower.s) <= Math.abs(upper.s - clampedS) ? lower.normal : upper.normal;
-    const tangent = sampledTangent ?? (reference && pointLength(reference) > 1e-9 ? normalize(perpendicular(reference)) : { x: 1, y: 0 });
-    const normal = sampledTangent ? stableNormalFromTangent(tangent, reference) : (reference ?? { x: 0, y: 1 });
+    const lastKnownTangent = stationContext?.lastValidTangent;
+    const lastKnownNormal = stationContext?.lastValidNormal;
+    const tangent = sampledTangent
+        ?? lastKnownTangent
+        ?? (reference && pointLength(reference) > 1e-9 ? normalize(perpendicular(reference)) : { x: 1, y: 0 });
+    const normal = sampledTangent
+        ? stableNormalFromTangent(tangent, reference ?? lastKnownNormal)
+        : (lastKnownNormal ?? reference ?? { x: 0, y: 1 });
+    if (stationContext) {
+        if (sampledTangent && pointLength(sampledTangent) > 1e-9) {
+            stationContext.lastValidTangent = tangent;
+            stationContext.lastValidNormal = normal;
+        }
+        stationContext.lastMode = sampledTangentResult?.mode ?? 'none';
+    }
     const station = { s: clampedS, pt, tangent, normal, segIndex: segment.index, t };
     debugCenterlineStation('sample', station);
     return station;
@@ -176,7 +241,8 @@ export function buildArrowCenterline(map, currentAnchorsData) {
             if (prevSample) {
                 s += pointLength(pointSubtract(pt, prevSample.pt));
             }
-            const tangent = tangentWithFallback(segment, t, prevSample, null);
+            const tangentResult = tangentWithFallback(segment, t, prevSample, null);
+            const tangent = tangentResult?.tangent ?? { x: 1, y: 0 };
             const normal = stableNormalFromTangent(tangent, prevNormal);
             const sample = { segIndex: segment.index, t, s, pt, tangent, normal };
             samples.push(sample);
