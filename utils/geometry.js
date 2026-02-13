@@ -68,6 +68,26 @@ function adaptiveCubicTValues(p0, p1, p2, p3, tolerance = 1.25, maxDepth = 10) {
     subdivide(p0, p1, p2, p3, 0, 1, 0);
     return Array.from(new Set(ts)).sort((a, b) => a - b);
 }
+function densifyTValues(ts, maxDeltaT = 1 / 24) {
+    if (!Array.isArray(ts) || ts.length === 0) {
+        return [0, 1];
+    }
+    const sorted = Array.from(new Set(ts)).sort((a, b) => a - b);
+    const dense = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const next = sorted[i];
+        const dt = next - prev;
+        if (dt > maxDeltaT) {
+            const insertCount = Math.floor(dt / maxDeltaT);
+            for (let j = 1; j <= insertCount; j++) {
+                dense.push(prev + (dt * j) / (insertCount + 1));
+            }
+        }
+        dense.push(next);
+    }
+    return dense;
+}
 function findByDistance(samples, s) {
     let lo = 0;
     let hi = samples.length - 1;
@@ -232,7 +252,7 @@ export function buildArrowCenterline(map, currentAnchorsData) {
     let prevSample = null;
     let prevNormal = null;
     for (const segment of segments) {
-        const ts = adaptiveCubicTValues(segment.p0, segment.cp1, segment.cp2, segment.p3);
+        const ts = densifyTValues(adaptiveCubicTValues(segment.p0, segment.cp1, segment.cp2, segment.p3));
         for (let idx = 0; idx < ts.length; idx++) {
             const t = ts[idx];
             if (samples.length > 0 && idx === 0)
