@@ -21,8 +21,9 @@ const App = () => {
     const [editingState, setEditingState] = useState(EditingState.Idle);
     const [currentAnchors, setCurrentAnchors] = useState([]);
     const [selectedArrowGroup, setSelectedArrowGroup] = useState(null);
-    const [currentRearWidthPx, setCurrentRearWidthPx] = useState(null);
-    const [currentNeckWidthPx, setCurrentNeckWidthPx] = useState(null);
+    const [currentShaftThicknessPx, setCurrentShaftThicknessPx] = useState(null);
+    const [currentRearTaper, setCurrentRearTaper] = useState(null);
+    const [currentFrontTaper, setCurrentFrontTaper] = useState(null);
     const [currentHeadWidthPx, setCurrentHeadWidthPx] = useState(null);
     const [currentHeadLengthPx, setCurrentHeadLengthPx] = useState(null);
     const [currentParamsBaseZoom, setCurrentParamsBaseZoom] = useState(null);
@@ -42,8 +43,6 @@ const App = () => {
     const handle2MarkersRef = useRef(new Map());
     const connector1LinesRef = useRef(new Map());
     const connector2LinesRef = useRef(new Map());
-    const shapeControlMarkersRef = useRef(new Map());
-    const activeShapeControlKeyRef = useRef(null);
     const currentGeometryRef = useRef(null);
     const previousStationFramesRef = useRef({ rearN: null, neckN: null, tipN: null });
     const stationTangentContextsRef = useRef({
@@ -98,21 +97,30 @@ const App = () => {
             },
         };
     }, [alignStationNormalWithPrevious]);
+    const defaultRearTaper = DEFAULT_REAR_WIDTH_PX / DEFAULT_NECK_WIDTH_PX;
+    const defaultFrontTaper = 1;
+    const shaftThicknessPx = currentShaftThicknessPx ?? DEFAULT_NECK_WIDTH_PX;
+    const rearTaper = currentRearTaper ?? defaultRearTaper;
+    const frontTaper = currentFrontTaper ?? defaultFrontTaper;
+    const rearWidthPx = Math.max(2, shaftThicknessPx * rearTaper);
+    const neckWidthPx = Math.max(2, shaftThicknessPx * frontTaper);
     const ensureShapeDefaults = useCallback(() => {
-        if (currentRearWidthPx !== null && currentNeckWidthPx !== null && currentHeadWidthPx !== null && currentHeadLengthPx !== null) {
+        if (currentShaftThicknessPx !== null && currentRearTaper !== null && currentFrontTaper !== null && currentHeadWidthPx !== null && currentHeadLengthPx !== null) {
             return;
         }
-        setCurrentRearWidthPx(currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX);
-        setCurrentNeckWidthPx(currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX);
+        setCurrentShaftThicknessPx(currentShaftThicknessPx ?? DEFAULT_NECK_WIDTH_PX);
+        setCurrentRearTaper(currentRearTaper ?? defaultRearTaper);
+        setCurrentFrontTaper(currentFrontTaper ?? defaultFrontTaper);
         setCurrentHeadWidthPx(currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX);
         setCurrentHeadLengthPx(currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX);
         if (currentParamsBaseZoom === null && mapRef.current) {
             setCurrentParamsBaseZoom(mapRef.current.getZoom());
         }
-    }, [currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx, currentHeadLengthPx, currentParamsBaseZoom]);
+    }, [currentShaftThicknessPx, currentRearTaper, currentFrontTaper, currentHeadWidthPx, currentHeadLengthPx, currentParamsBaseZoom, defaultRearTaper, defaultFrontTaper]);
     const resetCurrentPixelValues = useCallback(() => {
-        setCurrentRearWidthPx(null);
-        setCurrentNeckWidthPx(null);
+        setCurrentShaftThicknessPx(null);
+        setCurrentRearTaper(null);
+        setCurrentFrontTaper(null);
         setCurrentHeadWidthPx(null);
         setCurrentHeadLengthPx(null);
         setCurrentParamsBaseZoom(null);
@@ -181,8 +189,6 @@ const App = () => {
             currentGeometryRef.current = null;
             resetPreviousStationFrames();
             resetCurrentPixelValues();
-            if (currentRearWidthPx === null)
-                setCurrentRearWidthPx(DEFAULT_REAR_WIDTH_PX);
             if (currentHeadLengthPx === null)
                 setCurrentHeadLengthPx(DEFAULT_HEAD_LENGTH_PX);
             if (currentHeadWidthPx === null)
@@ -218,14 +224,14 @@ const App = () => {
         const unscaledHeadLengthPx = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
         currentGeometryRef.current = createGeometrySnapshot(centerline, totalLength, unscaledHeadLengthPx);
         const scale = currentParamsBaseZoom !== null ? map.getZoomScale(map.getZoom(), currentParamsBaseZoom) : 1;
-        const rearWidthPx = Math.max(0, (currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) * scale);
-        const neckWidthPx = Math.max(0, (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX) * scale);
+        const scaledRearWidthPx = Math.max(0, rearWidthPx * scale);
+        const scaledNeckWidthPx = Math.max(0, neckWidthPx * scale);
         const geometrySnapshot = currentGeometryRef.current;
         if (!geometrySnapshot)
             return;
         const headLengthPx = Math.min(geometrySnapshot.stations.headLengthPx * scale, geometrySnapshot.totalLength * scale);
         const headWidthPx = Math.max(0, (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) * scale);
-        const outlinePoints = calculateArrowOutlinePoints(geometrySnapshot.centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
+        const outlinePoints = calculateArrowOutlinePoints(geometrySnapshot.centerline, scaledRearWidthPx, scaledNeckWidthPx, headWidthPx, headLengthPx);
         if (outlinePoints) {
             try {
                 const outlineLatLngs = outlinePoints.map(p => map.layerPointToLatLng(L.point(p.x, p.y)));
@@ -250,7 +256,7 @@ const App = () => {
                 console.error("Error creating arrow preview shape:", error);
             }
         }
-    }, [getAnchorsData, editingState, currentRearWidthPx, currentNeckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentParamsBaseZoom, resetCurrentPixelValues, ensureShapeDefaults, startArrowDrag, createGeometrySnapshot, resetPreviousStationFrames]);
+    }, [getAnchorsData, editingState, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentParamsBaseZoom, resetCurrentPixelValues, ensureShapeDefaults, startArrowDrag, createGeometrySnapshot, resetPreviousStationFrames]);
     const handleGenericDragStart = useCallback((e) => {
         mapRef.current?.dragging.disable();
         if (e.originalEvent)
@@ -359,116 +365,6 @@ const App = () => {
         setBackupArrowNameCounter(arrowNameCounter);
     }, [arrowNameCounter]);
 
-    const getShapeControlGeometry = useCallback(() => {
-        const geometrySnapshot = currentGeometryRef.current;
-        if (!geometrySnapshot)
-            return null;
-        const rearStation = geometrySnapshot.stations.rear;
-        const neckStation = geometrySnapshot.stations.neck;
-        const tipStation = geometrySnapshot.stations.tip;
-        if (!rearStation || !neckStation || !tipStation)
-            return null;
-        const rearPt = rearStation.pt;
-        const neckPt = neckStation.pt;
-        const tip = tipStation.pt;
-        const rearN = rearStation.normal;
-        const neckN = neckStation.normal;
-        const neckTan = neckStation.tangent;
-        const rearHalf = (currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX) / 2;
-        const neckHalf = (currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX) / 2;
-        const headHalf = (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) / 2;
-        const headBaseCenter = neckPt;
-        return {
-            rearLeft: pointAdd(rearPt, pointMultiply(rearN, rearHalf)),
-            rearRight: pointSubtract(rearPt, pointMultiply(rearN, rearHalf)),
-            neckLeft: pointAdd(neckPt, pointMultiply(neckN, neckHalf)),
-            neckRight: pointSubtract(neckPt, pointMultiply(neckN, neckHalf)),
-            headControl: pointAdd(neckPt, pointMultiply(neckN, headHalf)),
-            headBaseCenter,
-            tip,
-            rearPt,
-            neckPt,
-            rearN,
-            neckN,
-            neckTan,
-            centerline: geometrySnapshot.centerline,
-        };
-    }, [currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx]);
-
-    const updateShapeControl = useCallback((key, e) => {
-        const map = mapRef.current;
-        const geometrySnapshot = currentGeometryRef.current;
-        if (!map || !geometrySnapshot)
-            return;
-        const rearStation = geometrySnapshot.stations.rear;
-        const neckStation = geometrySnapshot.stations.neck;
-        if (!rearStation || !neckStation)
-            return;
-        const rearPt = rearStation.pt;
-        const neckPt = neckStation.pt;
-        const rearN = rearStation.normal;
-        const neckN = neckStation.normal;
-        const neckTan = neckStation.tangent;
-        const projectToAxis = (base, dir, pt) => {
-            const delta = pointSubtract(pt, base);
-            const t = (delta.x * dir.x) + (delta.y * dir.y);
-            return pointAdd(base, pointMultiply(dir, t));
-        };
-        let markerPt = map.latLngToLayerPoint(e.target.getLatLng());
-        const toPt = (base, vec) => ({ x: markerPt.x - base.x, y: markerPt.y - base.y, dot: (markerPt.x - base.x) * vec.x + (markerPt.y - base.y) * vec.y });
-        const signedDistance = (base, dir) => {
-            const d = toPt(base, dir);
-            return d.dot;
-        };
-        const sideSafeDistance = (base, normal, side) => {
-            const sideNormal = side === 'left' ? normal : pointMultiply(normal, -1);
-            const projectedPoint = projectToAxis(base, sideNormal, markerPt);
-            const projectedDistance = Math.max(0, signedDistance(base, sideNormal));
-            const sideLockedPoint = pointAdd(base, pointMultiply(sideNormal, projectedDistance));
-            if (projectedPoint.x !== sideLockedPoint.x || projectedPoint.y !== sideLockedPoint.y) {
-                markerPt = sideLockedPoint;
-            }
-            else {
-                markerPt = projectedPoint;
-            }
-            e.target.setLatLng(map.layerPointToLatLng(L.point(markerPt.x, markerPt.y)));
-            return projectedDistance;
-        };
-        if (key === 'rearLeft') {
-            const distance = sideSafeDistance(rearPt, rearN, 'left');
-            setCurrentRearWidthPx(Math.max(2, 2 * distance));
-        }
-        else if (key === 'rearRight') {
-            const distance = sideSafeDistance(rearPt, rearN, 'right');
-            setCurrentRearWidthPx(Math.max(2, 2 * distance));
-        }
-        else if (key === 'neckLeft') {
-            const distance = sideSafeDistance(neckPt, neckN, 'left');
-            setCurrentNeckWidthPx(Math.max(2, 2 * distance));
-        }
-        else if (key === 'neckRight') {
-            const distance = sideSafeDistance(neckPt, neckN, 'right');
-            setCurrentNeckWidthPx(Math.max(2, 2 * distance));
-        }
-        else if (key === 'headControl') {
-            const currentLength = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
-            const currentHalfWidth = (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) / 2;
-            const controlOrigin = pointAdd(neckPt, pointMultiply(neckN, currentHalfWidth));
-            const controlDelta = pointSubtract(markerPt, controlOrigin);
-            const projectedLengthDelta = -((controlDelta.x * neckTan.x) + (controlDelta.y * neckTan.y));
-            const projectedHalfWidthDelta = (controlDelta.x * neckN.x) + (controlDelta.y * neckN.y);
-            setCurrentHeadLengthPx(Math.max(2, currentLength + projectedLengthDelta));
-            setCurrentHeadWidthPx(Math.max(2, 2 * (currentHalfWidth + projectedHalfWidthDelta)));
-        }
-    }, [currentHeadLengthPx, DEFAULT_HEAD_LENGTH_PX, currentHeadWidthPx, DEFAULT_HEAD_WIDTH_PX]);
-    const handleShapeControlDragStart = useCallback((e, key) => {
-        activeShapeControlKeyRef.current = key;
-        handleGenericDragStart(e);
-    }, [handleGenericDragStart]);
-    const handleShapeControlDragEnd = useCallback((e) => {
-        activeShapeControlKeyRef.current = null;
-        handleGenericDragEnd(e);
-    }, [handleGenericDragEnd]);
     const finalizeCurrentArrow = useCallback(() => {
         const map = mapRef.current;
         const arrowLyr = arrowLayerRef.current;
@@ -477,10 +373,10 @@ const App = () => {
             return null;
         }
         const anchorsToSave = getAnchorsData().map((a) => createArrowAnchorData(a));
-        let rearWidthPx = currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX;
-        let neckWidthPx = currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX;
-        let headLengthPx = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
-        let headWidthPx = currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX;
+        const rearWidthPx = Math.max(2, shaftThicknessPx * rearTaper);
+        const neckWidthPx = Math.max(2, shaftThicknessPx * frontTaper);
+        const headLengthPx = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
+        const headWidthPx = currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX;
 
         const baseZoom = currentParamsBaseZoom ?? map.getZoom();
         const finalArrowParams = createArrowParameters({
@@ -532,9 +428,8 @@ const App = () => {
         arrowLyr.addLayer(newArrowGroup);
         return newArrowGroup;
     }, [
-        currentAnchors, getAnchorsData, DEFAULT_REAR_WIDTH_PX, DEFAULT_NECK_WIDTH_PX,
-        DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentRearWidthPx,
-        currentNeckWidthPx, currentHeadLengthPx, currentHeadWidthPx,
+        currentAnchors, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper,
+        DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentHeadLengthPx, currentHeadWidthPx,
         currentArrowName, arrowNameCounter, selectedArrowGroup
     ]);
     const handleSelectArrow = useCallback((arrowGroupToSelect) => {
@@ -553,8 +448,12 @@ const App = () => {
         const loadedAnchors = fromArrowAnchorData(arrowGroupToSelect.savedAnchors, '_load');
         setCurrentAnchors(loadedAnchors);
         setCurrentArrowName(arrowGroupToSelect.arrowName);
-        setCurrentRearWidthPx(arrowGroupToSelect.arrowParameters.rearWidthPx);
-        setCurrentNeckWidthPx(arrowGroupToSelect.arrowParameters.neckWidthPx);
+        const rearWidth = arrowGroupToSelect.arrowParameters.rearWidthPx ?? DEFAULT_REAR_WIDTH_PX;
+        const neckWidth = arrowGroupToSelect.arrowParameters.neckWidthPx ?? DEFAULT_NECK_WIDTH_PX;
+        const shaft = Math.max(2, (rearWidth + neckWidth) / 2);
+        setCurrentShaftThicknessPx(shaft);
+        setCurrentRearTaper(rearWidth / shaft);
+        setCurrentFrontTaper(neckWidth / shaft);
         setCurrentHeadLengthPx(arrowGroupToSelect.arrowParameters.headLengthPx);
         setCurrentHeadWidthPx(arrowGroupToSelect.arrowParameters.headWidthPx);
         setCurrentParamsBaseZoom(arrowGroupToSelect.arrowParameters.baseZoom);
@@ -634,8 +533,9 @@ const App = () => {
         resetCurrentPixelValues();
         resetPreviousStationFrames();
         setCurrentArrowName(`Unbenannter Pfeil ${arrowNameCounter}`);
-        setCurrentRearWidthPx(DEFAULT_REAR_WIDTH_PX);
-        setCurrentNeckWidthPx(DEFAULT_NECK_WIDTH_PX);
+        setCurrentShaftThicknessPx(DEFAULT_NECK_WIDTH_PX);
+        setCurrentRearTaper(defaultRearTaper);
+        setCurrentFrontTaper(defaultFrontTaper);
         setCurrentHeadLengthPx(DEFAULT_HEAD_LENGTH_PX);
         setCurrentHeadWidthPx(DEFAULT_HEAD_WIDTH_PX);
     }, [editingState, arrowNameCounter, resetCurrentPixelValues, handleCancel, saveStateForCancel, resetPreviousStationFrames]);
@@ -645,8 +545,8 @@ const App = () => {
             return;
         const currentAnchorsDataToCopy = getAnchorsData();
         const currentPixelParams = createArrowParameters({
-            rearWidthPx: currentRearWidthPx,
-            neckWidthPx: currentNeckWidthPx,
+            rearWidthPx: rearWidthPx,
+            neckWidthPx: neckWidthPx,
             headLengthPx: currentHeadLengthPx,
             headWidthPx: currentHeadWidthPx,
             baseZoom: currentParamsBaseZoom,
@@ -686,13 +586,17 @@ const App = () => {
             return createArrowAnchorEntity({ id: newId, latlng: newLatLng, handle1: newH1, handle2: newH2 });
         });
         setCurrentAnchors(copiedAnchors);
-        setCurrentRearWidthPx(currentPixelParams.rearWidthPx);
-        setCurrentNeckWidthPx(currentPixelParams.neckWidthPx);
+        const copiedRearWidth = currentPixelParams.rearWidthPx ?? DEFAULT_REAR_WIDTH_PX;
+        const copiedNeckWidth = currentPixelParams.neckWidthPx ?? DEFAULT_NECK_WIDTH_PX;
+        const copiedShaft = Math.max(2, (copiedRearWidth + copiedNeckWidth) / 2);
+        setCurrentShaftThicknessPx(copiedShaft);
+        setCurrentRearTaper(copiedRearWidth / copiedShaft);
+        setCurrentFrontTaper(copiedNeckWidth / copiedShaft);
         setCurrentHeadLengthPx(currentPixelParams.headLengthPx);
         setCurrentHeadWidthPx(currentPixelParams.headWidthPx);
         setCurrentParamsBaseZoom(currentPixelParams.baseZoom);
         setCurrentArrowName(`${currentNameVal} (Kopie)`);
-    }, [editingState, currentAnchors.length, currentRearWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, getAnchorsData, handleConfirm]);
+    }, [editingState, currentAnchors.length, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, getAnchorsData, handleConfirm]);
     const handleDeleteSelectedArrow = useCallback(() => {
         if (editingState === EditingState.EditingSelected && selectedArrowGroup) {
             // The selectedArrowGroup is already removed from arrowLayerRef.current.
@@ -728,7 +632,27 @@ const App = () => {
             setCurrentArrowName('');
         }
     }, [editingState, selectedArrowGroup, resetCurrentPixelValues, savedArrowsBackup, resetPreviousStationFrames]);
-    const handleSliderChange = useCallback((value, type) => {
+    const handleShapeParamChange = useCallback((key, value) => {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) {
+            return;
+        }
+        const clampedValue = Math.max(0, numericValue);
+        if (key === 'shaftThickness') {
+            setCurrentShaftThicknessPx(Math.max(2, clampedValue));
+        }
+        else if (key === 'headLength') {
+            setCurrentHeadLengthPx(Math.max(2, clampedValue));
+        }
+        else if (key === 'headWidth') {
+            setCurrentHeadWidthPx(Math.max(2, clampedValue));
+        }
+        else if (key === 'rearTaper') {
+            setCurrentRearTaper(Math.max(0.2, Math.min(2.5, clampedValue)));
+        }
+        else if (key === 'frontTaper') {
+            setCurrentFrontTaper(Math.max(0.2, Math.min(2.5, clampedValue)));
+        }
     }, []);
     const generateGeoJsonForArrowForMap = useCallback((anchorsData, params, name) => {
         const map = mapRef.current;
@@ -739,8 +663,8 @@ const App = () => {
     const handleCopyGeoJson = useCallback(() => {
         if (editingState === EditingState.Idle || currentAnchors.length < 2)
             return;
-        const rearWidthPx = currentRearWidthPx ?? DEFAULT_REAR_WIDTH_PX;
-        const neckWidthPx = currentNeckWidthPx ?? DEFAULT_NECK_WIDTH_PX;
+        const rearWidthPx = Math.max(2, shaftThicknessPx * rearTaper);
+        const neckWidthPx = Math.max(2, shaftThicknessPx * frontTaper);
         const headLengthPx = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
         const headWidthPx = currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX;
         const feature = generateGeoJsonForArrowForMap(getAnchorsData(), createArrowParameters({
@@ -762,7 +686,7 @@ const App = () => {
         else {
             alert("Could not generate GeoJSON for the current arrow.");
         }
-    }, [editingState, currentAnchors.length, getAnchorsData, currentRearWidthPx, currentNeckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, generateGeoJsonForArrowForMap]);
+    }, [editingState, currentAnchors.length, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, generateGeoJsonForArrowForMap]);
     const handleSaveAllGeoJson = useCallback(() => {
         if (editingState !== EditingState.Idle && currentAnchors.length > 0) {
             alert("Please finish or cancel current editing before saving all arrows.");
@@ -840,7 +764,7 @@ const App = () => {
            });
            editingArrowLayerRef.current?.clearLayers();
        }
-    }, [currentAnchors, DEFAULT_REAR_WIDTH_PX, DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentRearWidthPx, currentHeadLengthPx, currentHeadWidthPx, editingState, updateCurveAndArrowPreview, resetPreviousStationFrames]);
+    }, [currentAnchors, DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentHeadLengthPx, currentHeadWidthPx, editingState, updateCurveAndArrowPreview, resetPreviousStationFrames]);
 
     useEffect(() => {
         if (currentAnchors.length < 2) {
@@ -1004,42 +928,6 @@ const App = () => {
             }
         });
     }, [currentAnchors, editingState , handleAnchorDragStart, handleAnchorDrag, handleAnchorDragEnd, handleGenericDragStart, handleHandleDrag, handleGenericDragEnd]);
-    useEffect(() => {
-        const map = mapRef.current;
-        const drawingLayer = drawingLayerRef.current;
-        if (!map || !drawingLayer)
-            return;
-        const geom = getShapeControlGeometry();
-        if (!geom || !isEditing(editingState)) {
-            shapeControlMarkersRef.current.forEach((m) => drawingLayer.removeLayer(m));
-            shapeControlMarkersRef.current.clear();
-            activeShapeControlKeyRef.current = null;
-            return;
-        }
-        const controlDefs = [
-            { key: 'rearLeft', point: geom.rearLeft },
-            { key: 'rearRight', point: geom.rearRight },
-            { key: 'neckLeft', point: geom.neckLeft },
-            { key: 'neckRight', point: geom.neckRight },
-            { key: 'headControl', point: geom.headControl },
-        ];
-        controlDefs.forEach((control) => {
-            const p = control.point;
-            const latlng = map.layerPointToLatLng(L.point(p.x, p.y));
-            let marker = shapeControlMarkersRef.current.get(control.key);
-            if (!marker) {
-                marker = L.marker(latlng, { draggable: true, zIndexOffset: 1100, icon: L.divIcon({ html: '<div style="width:10px;height:10px;border-radius:5px;background:#111;border:2px solid #fff"></div>', className: 'leaflet-div-icon shape-control-icon', iconSize: [10, 10], iconAnchor: [5, 5] }) }).addTo(drawingLayer);
-                marker.on('dragstart', (e) => handleShapeControlDragStart(e, control.key));
-                marker.on('drag', (e) => updateShapeControl(control.key, e));
-                marker.on('dragend', handleShapeControlDragEnd);
-                shapeControlMarkersRef.current.set(control.key, marker);
-            }
-            else if (activeShapeControlKeyRef.current !== control.key) {
-                marker.setLatLng(latlng);
-            }
-        });
-    }, [editingState, currentAnchors, getShapeControlGeometry, currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx, currentHeadLengthPx, updateShapeControl, handleShapeControlDragStart, handleShapeControlDragEnd]);
-
     // Control panel contract
     const canEditParameters = getCanEditParameters(editingState) && currentAnchors.length >= 2;
     const canCopyCurrentArrow = isEditing(editingState) && currentAnchors.length >= 2;
@@ -1054,6 +942,12 @@ const App = () => {
         canEditName: editingState !== EditingState.Idle,
         canCopyGeoJson: canCopyGeoJsonCurrent,
         canSaveAllGeoJson: canSaveAllGeoJsonExport,
+        canEditParameters,
+        shaftThickness: shaftThicknessPx,
+        headLength: currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX,
+        headWidth: currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX,
+        rearTaper,
+        frontTaper,
     };
     const controlPanelActions = {
         onDrawArrow: handleDrawArrow,
@@ -1064,6 +958,7 @@ const App = () => {
         onSaveAllGeoJson: handleSaveAllGeoJson,
         onConfirm: () => handleConfirm(true),
         onCancel: handleCancel,
+        onShapeParamChange: handleShapeParamChange,
     };
     return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { uiState: controlPanelUiState, actions: controlPanelActions })] }));
 };
