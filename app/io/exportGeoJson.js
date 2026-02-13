@@ -1,7 +1,42 @@
 import L from 'leaflet';
-import { getValidPointsAndLength, calculateArrowOutlinePoints } from '../geometry/index.js';
+import { getValidPointsAndLength, calculateArrowOutlinePoints, sampleCenterlineAtDistance } from '../geometry/index.js';
 
 const GEOJSON_MAX_SEGMENT_LENGTH_PX = 4;
+const GEOJSON_CENTERLINE_STEP_PX = 2;
+
+function buildExportCenterline(centerline, maxStepPx = GEOJSON_CENTERLINE_STEP_PX) {
+  if (!centerline || centerline.totalLength <= 0 || maxStepPx <= 0) {
+    return centerline;
+  }
+
+  const stepCount = Math.max(1, Math.ceil(centerline.totalLength / maxStepPx));
+  const samples = [];
+  const points = [];
+  const cumLengths = [];
+  const sampleContext = {};
+
+  for (let i = 0; i <= stepCount; i++) {
+    const s = (i / stepCount) * centerline.totalLength;
+    const station = sampleCenterlineAtDistance(centerline, s, sampleContext);
+    if (!station) {
+      continue;
+    }
+    samples.push(station);
+    points.push(station.pt);
+    cumLengths.push(station.s);
+  }
+
+  if (samples.length < 2) {
+    return centerline;
+  }
+
+  return {
+    ...centerline,
+    samples,
+    points,
+    cumLengths,
+  };
+}
 
 function densifyOutlinePoints(points, maxSegmentLengthPx = GEOJSON_MAX_SEGMENT_LENGTH_PX) {
   if (!Array.isArray(points) || points.length < 2 || maxSegmentLengthPx <= 0) {
@@ -52,8 +87,10 @@ export function generateGeoJsonForArrow(map, anchorsData, params, name) {
   headWidthPx *= scale;
   headLengthPx *= scale;
 
-  const outlinePoints = centerline
-    ? calculateArrowOutlinePoints(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx)
+  const exportCenterline = centerline ? buildExportCenterline(centerline) : null;
+
+  const outlinePoints = exportCenterline
+    ? calculateArrowOutlinePoints(exportCenterline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx)
     : calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
   if (!outlinePoints) return null;
 
