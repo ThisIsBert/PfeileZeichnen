@@ -1038,7 +1038,7 @@ const App = () => {
                 marker.setLatLng(latlng);
             }
         });
-    }, [editingState, getShapeControlGeometry, currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx, currentHeadLengthPx, updateShapeControl, handleShapeControlDragStart, handleShapeControlDragEnd]);
+    }, [editingState, currentAnchors, getShapeControlGeometry, currentRearWidthPx, currentNeckWidthPx, currentHeadWidthPx, currentHeadLengthPx, updateShapeControl, handleShapeControlDragStart, handleShapeControlDragEnd]);
 
     // Control panel contract
     const canEditParameters = getCanEditParameters(editingState) && currentAnchors.length >= 2;
