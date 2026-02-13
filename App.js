@@ -45,7 +45,22 @@ const App = () => {
     const shapeControlMarkersRef = useRef(new Map());
     const activeShapeControlKeyRef = useRef(null);
     const currentGeometryRef = useRef(null);
+    const previousStationFramesRef = useRef({ rearN: null, neckN: null, tipN: null });
     const getAnchorsData = useCallback(() => toArrowAnchorData(currentAnchors), [currentAnchors]);
+    const resetPreviousStationFrames = useCallback(() => {
+        previousStationFramesRef.current = { rearN: null, neckN: null, tipN: null };
+    }, []);
+    const alignStationNormalWithPrevious = useCallback((nextNormal, previousNormal) => {
+        if (!nextNormal || pointLength(nextNormal) < 1e-9) {
+            return previousNormal ?? { x: 0, y: 1 };
+        }
+        if (!previousNormal) {
+            return nextNormal;
+        }
+        return ((nextNormal.x * previousNormal.x) + (nextNormal.y * previousNormal.y)) < 0
+            ? pointMultiply(nextNormal, -1)
+            : nextNormal;
+    }, []);
     const createGeometrySnapshot = useCallback((centerline, totalLength, headLengthPx) => {
         if (!centerline || totalLength <= 1e-6)
             return null;
@@ -56,17 +71,22 @@ const App = () => {
         const tipStation = sampleCenterlineAtDistance(centerline, totalLength);
         if (!rearStation || !neckStation || !tipStation)
             return null;
+        const previousNormals = previousStationFramesRef.current;
+        const rearN = alignStationNormalWithPrevious(rearStation.normal, previousNormals.rearN);
+        const neckN = alignStationNormalWithPrevious(neckStation.normal, previousNormals.neckN);
+        const tipN = alignStationNormalWithPrevious(tipStation.normal, previousNormals.tipN);
+        previousStationFramesRef.current = { rearN, neckN, tipN };
         return {
             centerline,
             totalLength,
             stations: {
-                rear: rearStation,
-                neck: neckStation,
-                tip: tipStation,
+                rear: { ...rearStation, normal: rearN },
+                neck: { ...neckStation, normal: neckN },
+                tip: { ...tipStation, normal: tipN },
                 headLengthPx: clampedHeadLengthPx,
             },
         };
-    }, []);
+    }, [alignStationNormalWithPrevious]);
     const ensureShapeDefaults = useCallback(() => {
         if (currentRearWidthPx !== null && currentNeckWidthPx !== null && currentHeadWidthPx !== null && currentHeadLengthPx !== null) {
             return;
@@ -148,6 +168,7 @@ const App = () => {
         const anchorsData = getAnchorsData();
         if (anchorsData.length < 2) {
             currentGeometryRef.current = null;
+            resetPreviousStationFrames();
             resetCurrentPixelValues();
             if (currentRearWidthPx === null)
                 setCurrentRearWidthPx(DEFAULT_REAR_WIDTH_PX);
@@ -160,6 +181,7 @@ const App = () => {
         const { pts, totalLength, validCurveData, centerline } = getValidPointsAndLength(map, anchorsData);
         if (pts.length < 2) {
             currentGeometryRef.current = null;
+            resetPreviousStationFrames();
             resetCurrentPixelValues();
             return;
         }
@@ -217,7 +239,7 @@ const App = () => {
                 console.error("Error creating arrow preview shape:", error);
             }
         }
-    }, [getAnchorsData, editingState, currentRearWidthPx, currentNeckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentParamsBaseZoom, resetCurrentPixelValues, ensureShapeDefaults, startArrowDrag, createGeometrySnapshot]);
+    }, [getAnchorsData, editingState, currentRearWidthPx, currentNeckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentParamsBaseZoom, resetCurrentPixelValues, ensureShapeDefaults, startArrowDrag, createGeometrySnapshot, resetPreviousStationFrames]);
     const handleGenericDragStart = useCallback((e) => {
         mapRef.current?.dragging.disable();
         if (e.originalEvent)
@@ -577,17 +599,19 @@ const App = () => {
         setCurrentAnchors([]);
         setSelectedArrowGroup(null);
         resetCurrentPixelValues();
+        resetPreviousStationFrames();
         if (incrementCounterAndUpdateBackup) {
             clearBackupState();
         }
-    }, [finalizeCurrentArrow, editingState, resetCurrentPixelValues, clearBackupState]);
+    }, [finalizeCurrentArrow, editingState, resetCurrentPixelValues, clearBackupState, resetPreviousStationFrames]);
     const handleCancel = useCallback(() => {
         restoreStateFromCancel();
         setEditingState(EditingState.Idle);
         setCurrentAnchors([]);
         setSelectedArrowGroup(null);
         resetCurrentPixelValues();
-    }, [resetCurrentPixelValues, restoreStateFromCancel]);
+        resetPreviousStationFrames();
+    }, [resetCurrentPixelValues, restoreStateFromCancel, resetPreviousStationFrames]);
     const handleDrawArrow = useCallback(() => {
         if (editingState !== EditingState.Idle) {
             handleCancel();
@@ -597,12 +621,13 @@ const App = () => {
         setCurrentAnchors([]);
         setSelectedArrowGroup(null);
         resetCurrentPixelValues();
+        resetPreviousStationFrames();
         setCurrentArrowName(`Unbenannter Pfeil ${arrowNameCounter}`);
         setCurrentRearWidthPx(DEFAULT_REAR_WIDTH_PX);
         setCurrentNeckWidthPx(DEFAULT_NECK_WIDTH_PX);
         setCurrentHeadLengthPx(DEFAULT_HEAD_LENGTH_PX);
         setCurrentHeadWidthPx(DEFAULT_HEAD_WIDTH_PX);
-    }, [editingState, arrowNameCounter, resetCurrentPixelValues, handleCancel, saveStateForCancel]);
+    }, [editingState, arrowNameCounter, resetCurrentPixelValues, handleCancel, saveStateForCancel, resetPreviousStationFrames]);
     const handleCopyArrow = useCallback(() => {
         const map = mapRef.current;
         if (!map || editingState === EditingState.Idle || currentAnchors.length < 2)
@@ -688,9 +713,10 @@ const App = () => {
             setCurrentAnchors([]);
             setSelectedArrowGroup(null); // Crucial: this "deletes" the active editing arrow
             resetCurrentPixelValues();
+            resetPreviousStationFrames();
             setCurrentArrowName('');
         }
-    }, [editingState, selectedArrowGroup, resetCurrentPixelValues, savedArrowsBackup]);
+    }, [editingState, selectedArrowGroup, resetCurrentPixelValues, savedArrowsBackup, resetPreviousStationFrames]);
     const handleSliderChange = useCallback((value, type) => {
     }, []);
     const generateGeoJsonForArrowForMap = useCallback((anchorsData, params, name) => {
@@ -796,13 +822,20 @@ const App = () => {
        }
        else {
            currentGeometryRef.current = null;
+           resetPreviousStationFrames();
            drawingLayerRef.current?.eachLayer(layer => {
                if (layer.options?.isPreviewLine)
                    drawingLayerRef.current?.removeLayer(layer);
            });
            editingArrowLayerRef.current?.clearLayers();
        }
-    }, [currentAnchors, DEFAULT_REAR_WIDTH_PX, DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentRearWidthPx, currentHeadLengthPx, currentHeadWidthPx, editingState, updateCurveAndArrowPreview]);
+    }, [currentAnchors, DEFAULT_REAR_WIDTH_PX, DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentRearWidthPx, currentHeadLengthPx, currentHeadWidthPx, editingState, updateCurveAndArrowPreview, resetPreviousStationFrames]);
+
+    useEffect(() => {
+        if (currentAnchors.length < 2) {
+            resetPreviousStationFrames();
+        }
+    }, [currentAnchors.length, resetPreviousStationFrames]);
 
 
     // Effect for managing anchor/handle markers and connector lines
