@@ -46,9 +46,19 @@ const App = () => {
     const activeShapeControlKeyRef = useRef(null);
     const currentGeometryRef = useRef(null);
     const previousStationFramesRef = useRef({ rearN: null, neckN: null, tipN: null });
+    const stationTangentContextsRef = useRef({
+        rear: { lastMode: null, lastValidTangent: null, lastValidNormal: null },
+        neck: { lastMode: null, lastValidTangent: null, lastValidNormal: null },
+        tip: { lastMode: null, lastValidTangent: null, lastValidNormal: null },
+    });
     const getAnchorsData = useCallback(() => toArrowAnchorData(currentAnchors), [currentAnchors]);
     const resetPreviousStationFrames = useCallback(() => {
         previousStationFramesRef.current = { rearN: null, neckN: null, tipN: null };
+        stationTangentContextsRef.current = {
+            rear: { lastMode: null, lastValidTangent: null, lastValidNormal: null },
+            neck: { lastMode: null, lastValidTangent: null, lastValidNormal: null },
+            tip: { lastMode: null, lastValidTangent: null, lastValidNormal: null },
+        };
     }, []);
     const alignStationNormalWithPrevious = useCallback((nextNormal, previousNormal) => {
         if (!nextNormal || pointLength(nextNormal) < 1e-9) {
@@ -66,9 +76,10 @@ const App = () => {
             return null;
         const clampedHeadLengthPx = Math.min(Math.max(0, headLengthPx), totalLength);
         const neckS = Math.max(0, totalLength - clampedHeadLengthPx);
-        const rearStation = sampleCenterlineAtDistance(centerline, 0);
-        const neckStation = sampleCenterlineAtDistance(centerline, neckS);
-        const tipStation = sampleCenterlineAtDistance(centerline, totalLength);
+        const tangentContexts = stationTangentContextsRef.current;
+        const rearStation = sampleCenterlineAtDistance(centerline, 0, tangentContexts.rear);
+        const neckStation = sampleCenterlineAtDistance(centerline, neckS, tangentContexts.neck);
+        const tipStation = sampleCenterlineAtDistance(centerline, totalLength, tangentContexts.tip);
         if (!rearStation || !neckStation || !tipStation)
             return null;
         const previousNormals = previousStationFramesRef.current;
