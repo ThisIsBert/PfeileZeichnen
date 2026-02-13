@@ -92,8 +92,12 @@ function tangentWithFallback(segment, t, nearestSampleA, nearestSampleB) {
     }
     if (nearestSampleA && nearestSampleB) {
         const chord = pointSubtract(nearestSampleB.pt, nearestSampleA.pt);
-        if (pointLength(chord) > 1e-9) {
+        const chordLength = pointLength(chord);
+        if (chordLength > 1e-9) {
             return normalize(chord);
+        }
+        if (chordLength <= 1e-6) {
+            return null;
         }
     }
     return { x: 1, y: 0 };
@@ -134,9 +138,10 @@ export function sampleCenterlineAtDistance(centerline, s) {
         segment = centerline.segments[lower.segIndex] ?? segment;
     }
     const pt = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
-    const tangent = tangentWithFallback(segment, t, lower, upper);
+    const sampledTangent = tangentWithFallback(segment, t, lower, upper);
     const reference = Math.abs(clampedS - lower.s) <= Math.abs(upper.s - clampedS) ? lower.normal : upper.normal;
-    const normal = stableNormalFromTangent(tangent, reference);
+    const tangent = sampledTangent ?? (reference && pointLength(reference) > 1e-9 ? normalize(perpendicular(reference)) : { x: 1, y: 0 });
+    const normal = sampledTangent ? stableNormalFromTangent(tangent, reference) : (reference ?? { x: 0, y: 1 });
     const station = { s: clampedS, pt, tangent, normal, segIndex: segment.index, t };
     debugCenterlineStation('sample', station);
     return station;
