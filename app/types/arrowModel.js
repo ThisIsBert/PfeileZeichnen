@@ -1,3 +1,5 @@
+import { DEFAULT_FORM } from './shapeParameters.js';
+
 /**
  * @typedef {{ lat: number, lng: number }} LatLngLiteral
  */
@@ -33,6 +35,9 @@
 
 /**
  * @typedef {{
+ *   shaftThicknessPx: number | null,
+ *   rearTaper: number | null,
+ *   frontTaper: number | null,
  *   rearWidthPx: number | null,
  *   neckWidthPx: number | null,
  *   headWidthPx: number | null,
@@ -43,6 +48,7 @@
 
 /**
  * @typedef {{
+ *   id: string,
  *   savedAnchors: ArrowAnchorData[],
  *   arrowParameters: ArrowParameters,
  *   arrowName: string
@@ -99,18 +105,44 @@ export function createArrowParameters(value) {
   const legacyHeadLength = getNumberOrNull(data.arrowHeadLengthPixels);
   const legacyHeadWidth = getNumberOrNull(data.arrowHeadWidthPixels);
 
-  const rearWidthPx = getNumberOrNull(data.rearWidthPx) ?? legacyShaftThickness;
-  const neckWidthPx = getNumberOrNull(data.neckWidthPx) ?? legacyShaftThickness;
+  const shaftThicknessPx = getNumberOrNull(data.shaftThicknessPx);
+  const rearTaper = getNumberOrNull(data.rearTaper);
+  const frontTaper = getNumberOrNull(data.frontTaper);
+  const rearWidthPx = shaftThicknessPx !== null && rearTaper !== null
+    ? Math.max(2, shaftThicknessPx * rearTaper)
+    : getNumberOrNull(data.rearWidthPx) ?? legacyShaftThickness;
+  const neckWidthPx = shaftThicknessPx !== null && frontTaper !== null
+    ? Math.max(2, shaftThicknessPx * frontTaper)
+    : getNumberOrNull(data.neckWidthPx) ?? legacyShaftThickness;
   const headWidthPx = getNumberOrNull(data.headWidthPx) ?? legacyHeadWidth;
   const headLengthPx = getNumberOrNull(data.headLengthPx) ?? legacyHeadLength;
 
   return {
+    shaftThicknessPx,
+    rearTaper,
+    frontTaper,
     rearWidthPx,
     neckWidthPx,
     headWidthPx,
     headLengthPx,
     baseZoom: getNumberOrNull(data.baseZoom),
   };
+}
+
+/** Keep explicit form values; derive them only for older width-only records. */
+export function resolveArrowParameters(value) {
+  const params = createArrowParameters(value);
+  const rearWidth = params.rearWidthPx ?? DEFAULT_FORM.shaftThicknessPx * DEFAULT_FORM.rearTaper;
+  const neckWidth = params.neckWidthPx ?? DEFAULT_FORM.shaftThicknessPx * DEFAULT_FORM.frontTaper;
+  const shaft = params.shaftThicknessPx ?? Math.max(2, (rearWidth + neckWidth) / 2);
+  return createArrowParameters({
+    ...params,
+    shaftThicknessPx: shaft,
+    rearTaper: params.rearTaper ?? rearWidth / shaft,
+    frontTaper: params.frontTaper ?? neckWidth / shaft,
+    headLengthPx: params.headLengthPx ?? DEFAULT_FORM.headLengthPx,
+    headWidthPx: params.headWidthPx ?? DEFAULT_FORM.headWidthPx,
+  });
 }
 
 /**
@@ -143,11 +175,12 @@ export function createArrowAnchorEntity(value) {
 }
 
 /**
- * @param {{savedAnchors:any[],arrowParameters:any,arrowName?:string}} value
+ * @param {{id?:string,savedAnchors:any[],arrowParameters:any,arrowName?:string}} value
  * @returns {PersistedArrow}
  */
 export function createPersistedArrow(value) {
   return {
+    id: typeof value?.id === 'string' ? value.id : '',
     savedAnchors: Array.isArray(value?.savedAnchors) ? value.savedAnchors.map(createArrowAnchorData) : [],
     arrowParameters: createArrowParameters(value?.arrowParameters),
     arrowName: typeof value?.arrowName === 'string' ? value.arrowName : '',

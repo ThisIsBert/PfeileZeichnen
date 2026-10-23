@@ -29,6 +29,16 @@ Runtime CDN imports are pinned and documented in `DEPENDENCIES.md`.
 - The outline uses tapered strips with round joins and a curved head. Overlaps are merged; loops retain holes.
 - Preview, saved arrows, and GeoJSON share the same outline. Exports use Polygon (or MultiPolygon when necessary), with closed rings and preserved holes.
 
+## Undo/redo and form values
+
+**Rückgängig** / **Wiederholen** and Ctrl/Cmd+Z, Ctrl+Y or Ctrl/Cmd+Shift+Z restore up to 100 arrow actions in the current session. Drawing anchors, dragging an anchor/handle/arrow, name and form changes, eyedropper, copy, delete, finish and cancel are included. Each drag or slider gesture is one step. Map navigation and reference layers are independent of this arrow history.
+
+Each form slider also has a numeric field. Enter commits that field; Escape restores its value from before typing. Empty fields revert to their last valid value, and values outside the displayed limits are clamped on commit. Native text undo remains available while typing in a field.
+
+Pixel sizes refer to the arrow's **reference zoom**, shown alongside the current zoom and scale factor. Rear/front taper are dimensionless factors. The original shaft thickness and taper values are stored, so reselecting, copying or sampling an arrow keeps the same numbers. Older width-only records remain supported.
+
+If arrow geometry cannot be saved, the draft, name, form values and cancel baseline remain available. Fix the geometry, undo the last edit, or cancel explicitly. Copying or selecting another arrow cannot bypass a failed save.
+
 ## GeoJSON templates
 
 Use **GeoJSON laden** in the **Vorlage** section to load one or more local `.geojson` or `.json` files in WGS84. Geometry objects, Features, FeatureCollections and GeometryCollections are supported, including points, lines, polygons and multipart geometries.

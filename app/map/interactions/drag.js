@@ -61,7 +61,7 @@ export { pointSubtract };
  * once the pointer travels at least three pixels. Document listeners also catch
  * releases outside the map, so map dragging is always restored.
  */
-export function bindSavedArrowInteractions(map, shape, arrowGroup, { canDrag, onClick }) {
+export function bindSavedArrowInteractions(map, shape, arrowGroup, { canDrag, onClick, onDragStart, onDragEnd }) {
   let activeDrag = null;
   let suppressClick = false;
   const projectRings = rings => rings.map(value => Array.isArray(value)
@@ -74,6 +74,7 @@ export function bindSavedArrowInteractions(map, shape, arrowGroup, { canDrag, on
     if (!activeDrag) return;
     const delta = pointSubtract(getContainerPoint(map, event), activeDrag.start);
     if (!suppressClick && Math.hypot(delta.x, delta.y) < 3) return;
+    if (!suppressClick) onDragStart?.();
     suppressClick = true;
     event.preventDefault();
     shape.setLatLngs(translateRings(activeDrag.rings, delta));
@@ -88,6 +89,7 @@ export function bindSavedArrowInteractions(map, shape, arrowGroup, { canDrag, on
     map.getContainer().style.cursor = activeDrag.cursor;
     if (activeDrag.mapDraggingEnabled) map.dragging.enable();
     activeDrag = null;
+    if (suppressClick) onDragEnd?.();
   };
   shape.on('mousedown', event => {
     suppressClick = false;

@@ -1,9 +1,10 @@
 import L from 'leaflet';
+import { DEFAULT_FORM } from './app/types/shapeParameters.js';
 
-export const DEFAULT_REAR_WIDTH_PX = 20;
-export const DEFAULT_NECK_WIDTH_PX = 16;
-export const DEFAULT_HEAD_WIDTH_PX = 36;
-export const DEFAULT_HEAD_LENGTH_PX = 48;
+export const DEFAULT_REAR_WIDTH_PX = DEFAULT_FORM.shaftThicknessPx * DEFAULT_FORM.rearTaper;
+export const DEFAULT_NECK_WIDTH_PX = DEFAULT_FORM.shaftThicknessPx;
+export const DEFAULT_HEAD_WIDTH_PX = DEFAULT_FORM.headWidthPx;
+export const DEFAULT_HEAD_LENGTH_PX = DEFAULT_FORM.headLengthPx;
 
 export const HANDLE_OFFSET_ON_LINE_PIXELS = 30;
 export const ANCHOR_ICON_HTML = '<div style="width:12px;height:12px;border-radius:6px;background:red;border:2px solid white;box-shadow: 0 0 3px rgba(0,0,0,0.5);"></div>';

@@ -14,7 +14,10 @@ import { createTemplateGeometryLayer } from './app/map/templateLayer.js';
 import { generateGeoJsonForArrow } from './app/io/exportGeoJson.js';
 import { canDeleteArrow as getCanDeleteArrow, canEditParameters as getCanEditParameters, canSaveAllGeoJson as getCanSaveAllGeoJson, isEditing } from './app/state/editingState.js';
 import { fromArrowAnchorData, toArrowAnchorData } from './app/adapters/leafletArrowAdapter.js';
-import { createArrowAnchorData, createArrowAnchorEntity, createArrowParameters, createPersistedArrow, createLatLngLiteral } from './app/types/arrowModel.js';
+import { createArrowAnchorData, resolveArrowParameters, createArrowAnchorEntity, createArrowParameters, createPersistedArrow, createLatLngLiteral } from './app/types/arrowModel.js';
+import { useEditorHistory } from './app/hooks/useEditorHistory.js';
+import { createSavedArrowGroup, getSavedArrowData } from './app/map/savedArrows.js';
+import { clampFormValue } from './app/types/shapeParameters.js';
 const App = () => {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
@@ -22,6 +25,17 @@ const App = () => {
     const templateLayerRef = useRef(null);
     const arrowLayerRef = useRef(null);
     const editingArrowLayerRef = useRef(null);
+    const history = useEditorHistory();
+    const [editorError, setEditorError] = useState('');
+    const [mapZoom, setMapZoom] = useState(null);
+    const isSceneDraggingRef = useRef(false);
+    const ignoreDragClickRef = useRef(false);
+    const suppressDragClick = useCallback(() => {
+        // A browser click can follow mouseup when a dragged marker ends over
+        // another element. It must not finish the editing session.
+        ignoreDragClickRef.current = true;
+        setTimeout(() => { ignoreDragClickRef.current = false; }, 0);
+    }, []);
     const [editingState, setEditingState] = useState(EditingState.Idle);
     const [isPickingShape, setIsPickingShape] = useState(false);
     const shapePickerRef = useRef(isPickingShape);
@@ -50,8 +64,11 @@ const App = () => {
         bindSavedArrowInteractions(mapRef.current, shape, arrowGroup, {
             canDrag: () => editingStateRef.current === EditingState.Idle && !shapePickerRef.current,
             onClick: event => handleSelectArrowRef.current?.(arrowGroup, event.latlng),
+            onDragStart: () => { isSceneDraggingRef.current = true; history.begin(); },
+            onDragEnd: () => { isSceneDraggingRef.current = false; history.end(); },
         });
-    }, []);
+    }, [history.begin, history.end]);
+    const buildSavedArrow = useCallback(data => createSavedArrowGroup(mapRef.current, data, bindSavedArrow), [bindSavedArrow]);
     // Refs for Leaflet objects
     const anchorMarkersRef = useRef(new Map());
     const handle1MarkersRef = useRef(new Map());
@@ -145,12 +162,12 @@ const App = () => {
         const map = mapRef.current;
         if (!map)
             return;
-        setCurrentAnchors(prevAnchors => {
+        history.run(() => setCurrentAnchors(prevAnchors => {
             const newAnchorId = Date.now().toString() + Math.random().toString();
             const newAnchorLatLng = L.latLng(latlng.lat, latlng.lng);
             return insertAnchorWithAlignedHandles(map, prevAnchors, newAnchorLatLng, index, newAnchorId);
-        });
-    }, []);
+        }));
+    }, [history.run]);
     const onArrowDrag = useCallback((e) => {
         const map = mapRef.current;
         if (!isArrowDraggingRef.current || !map || !arrowDragStartPointRef.current)
@@ -164,11 +181,16 @@ const App = () => {
         if (!isArrowDraggingRef.current || !map)
             return;
         isArrowDraggingRef.current = false;
+        suppressDragClick();
+        isSceneDraggingRef.current = false;
+        history.end();
+        document.removeEventListener('mouseup', stopArrowDrag);
+        window.removeEventListener('blur', stopArrowDrag);
         map.off('mousemove', onArrowDrag);
         map.off('mouseup', stopArrowDrag);
         map.dragging.enable();
         map.getContainer().style.cursor = (editingState === EditingState.DrawingNew) ? "crosshair" : "default";
-    }, [editingState, onArrowDrag]);
+    }, [editingState, onArrowDrag, history.end, suppressDragClick]);
     const startArrowDrag = useCallback((e) => {
         const map = mapRef.current;
         if (!map || currentAnchors.length < 1 || editingState === EditingState.Idle)
@@ -177,6 +199,8 @@ const App = () => {
             return;
         L.DomEvent.stopPropagation(e.originalEvent);
         L.DomEvent.preventDefault(e.originalEvent);
+        history.begin();
+        isSceneDraggingRef.current = true;
         isArrowDraggingRef.current = true;
         arrowDragStartPointRef.current = getContainerPoint(map, e.originalEvent);
         const initialLayerPoints = getInitialLayerPoints(map, currentAnchors);
@@ -186,8 +210,10 @@ const App = () => {
         map.dragging.disable();
         map.on('mousemove', onArrowDrag);
         map.on('mouseup', stopArrowDrag);
+        document.addEventListener('mouseup', stopArrowDrag);
+        window.addEventListener('blur', stopArrowDrag);
         map.getContainer().style.cursor = 'grabbing';
-    }, [currentAnchors, editingState, onArrowDrag, stopArrowDrag]);
+    }, [currentAnchors, editingState, onArrowDrag, stopArrowDrag, history.begin]);
     const updateCurveAndArrowPreview = useCallback(() => {
         const map = mapRef.current;
         const drawingLayer = drawingLayerRef.current;
@@ -204,18 +230,12 @@ const App = () => {
         if (anchorsData.length < 2) {
             currentGeometryRef.current = null;
             resetPreviousStationFrames();
-            resetCurrentPixelValues();
-            if (currentHeadLengthPx === null)
-                setCurrentHeadLengthPx(DEFAULT_HEAD_LENGTH_PX);
-            if (currentHeadWidthPx === null)
-                setCurrentHeadWidthPx(DEFAULT_HEAD_WIDTH_PX);
             return;
         }
         const { pts, totalLength, validCurveData, centerline } = getValidPointsAndLength(map, anchorsData);
         if (pts.length < 2) {
             currentGeometryRef.current = null;
             resetPreviousStationFrames();
-            resetCurrentPixelValues();
             return;
         }
         try {
@@ -278,15 +298,20 @@ const App = () => {
         }
     }, [getAnchorsData, editingState, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentParamsBaseZoom, resetCurrentPixelValues, ensureShapeDefaults, startArrowDrag, createGeometrySnapshot, resetPreviousStationFrames, addAnchor]);
     const handleGenericDragStart = useCallback((e) => {
+        isSceneDraggingRef.current = true;
+        history.begin();
         mapRef.current?.dragging.disable();
         if (e.originalEvent)
             L.DomEvent.stopPropagation(e.originalEvent);
-    }, []);
+    }, [history.begin]);
     const handleGenericDragEnd = useCallback((e) => {
+        suppressDragClick();
+        isSceneDraggingRef.current = false;
+        history.end();
         mapRef.current?.dragging.enable();
         if (e.originalEvent)
             L.DomEvent.stopPropagation(e.originalEvent);
-    }, []);
+    }, [history.end, suppressDragClick]);
     const handleAnchorDragStart = useCallback((e, _anchorId) => {
         handleGenericDragStart(e);
     }, [handleGenericDragStart]);
@@ -346,6 +371,7 @@ const App = () => {
             const arrowGroup = layer;
             if (arrowGroup.savedAnchors && arrowGroup.arrowParameters) {
                 currentFinalizedArrows.push(createPersistedArrow({
+                    id: arrowGroup.arrowId,
                     savedAnchors: JSON.parse(JSON.stringify(arrowGroup.savedAnchors)),
                     arrowParameters: JSON.parse(JSON.stringify(arrowGroup.arrowParameters)),
                     arrowName: arrowGroup.arrowName,
@@ -358,78 +384,35 @@ const App = () => {
 
     const finalizeCurrentArrow = useCallback(() => {
         const map = mapRef.current;
-        const arrowLyr = arrowLayerRef.current;
-        if (!map || !arrowLyr || currentAnchors.length < 2) {
-            setCurrentAnchors([]);
-            return null;
-        }
-        const anchorsToSave = getAnchorsData().map((a) => createArrowAnchorData(a));
-        const rearWidthPx = Math.max(2, shaftThicknessPx * rearTaper);
-        const neckWidthPx = Math.max(2, shaftThicknessPx * frontTaper);
-        const headLengthPx = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
-        const headWidthPx = currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX;
-
-        const baseZoom = currentParamsBaseZoom ?? map.getZoom();
-        const finalArrowParams = createArrowParameters({
-            rearWidthPx,
-            neckWidthPx,
-            headLengthPx,
-            headWidthPx,
-            baseZoom
+        const arrowLayer = arrowLayerRef.current;
+        const group = buildSavedArrow({
+            id: selectedArrowGroup?.arrowId,
+            savedAnchors: getAnchorsData(),
+            arrowParameters: createArrowParameters({
+                shaftThicknessPx, rearTaper, frontTaper,
+                headLengthPx: currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX,
+                headWidthPx: currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX,
+                baseZoom: currentParamsBaseZoom ?? map?.getZoom() ?? null,
+            }),
+            arrowName: currentArrowName.trim() || `Unbenannter Pfeil ${arrowNameCounter}`,
         });
-        const { totalLength, centerline } = getValidPointsAndLength(map, getAnchorsData());
-        if (!centerline) {
-            console.error("Finalize: Invalid points for geometry.");
+        if (!group || !arrowLayer) {
+            setEditorError('Der Pfeil konnte nicht gespeichert werden. Prüfe die Stützpunkte oder wähle Rückgängig. Deine Bearbeitung bleibt erhalten.');
             return null;
         }
-        const scale = map.getZoomScale(map.getZoom(), baseZoom);
-        const outlinePoints = calculateArrowOutlinePolygons(centerline, rearWidthPx * scale, neckWidthPx * scale, headWidthPx * scale, headLengthPx * scale);
-        if (!outlinePoints) {
-            console.warn("Finalize: No polygons generated for arrow.");
-            return null;
-        }
-        const newArrowGroup = L.layerGroup();
-        try {
-            const outlineLatLngs = outlinePoints.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
-            if (outlineLatLngs.length > 0) {
-                const finalShape = L.polygon(outlineLatLngs, { color: 'red', fillColor: 'red', fillOpacity: 0.5, weight: 1 });
-                bindSavedArrow(finalShape, newArrowGroup);
-                newArrowGroup.addLayer(finalShape);
-            }
-            else {
-                console.warn("Finalize: Not enough points for polygon.");
-                return null;
-            }
-        }
-        catch (error) {
-            console.error("Error generating final polygons:", error);
-            return null;
-        }
-        newArrowGroup.savedAnchors = anchorsToSave;
-        newArrowGroup.arrowParameters = finalArrowParams;
-        newArrowGroup.arrowName = currentArrowName.trim() || `Unbenannter Pfeil ${arrowNameCounter}`;
-        if (selectedArrowGroup) {
-            arrowLyr.removeLayer(selectedArrowGroup);
-        }
-        arrowLyr.addLayer(newArrowGroup);
-        return newArrowGroup;
-    }, [
-        currentAnchors, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper,
-        DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentHeadLengthPx, currentHeadWidthPx,
-        currentArrowName, arrowNameCounter, selectedArrowGroup, currentParamsBaseZoom, bindSavedArrow
-    ]);
+        if (selectedArrowGroup) arrowLayer.removeLayer(selectedArrowGroup);
+        arrowLayer.addLayer(group);
+        setEditorError('');
+        return group;
+    }, [buildSavedArrow, selectedArrowGroup, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper,
+        currentHeadLengthPx, currentHeadWidthPx, currentParamsBaseZoom, currentArrowName, arrowNameCounter]);
     const applyArrowParameters = useCallback(parameters => {
-        const params = createArrowParameters(parameters);
-        const rearWidth = params.rearWidthPx ?? DEFAULT_REAR_WIDTH_PX;
-        const neckWidth = params.neckWidthPx ?? DEFAULT_NECK_WIDTH_PX;
-        const shaft = Math.max(2, (rearWidth + neckWidth) / 2);
-        setCurrentShaftThicknessPx(shaft);
-        setCurrentRearTaper(rearWidth / shaft);
-        setCurrentFrontTaper(neckWidth / shaft);
-        setCurrentHeadLengthPx(params.headLengthPx ?? DEFAULT_HEAD_LENGTH_PX);
-        setCurrentHeadWidthPx(params.headWidthPx ?? DEFAULT_HEAD_WIDTH_PX);
-        // Keep the source's reference zoom: the same numbers can otherwise
-        // render at different sizes on arrows created at different zooms.
+        const params = resolveArrowParameters(parameters);
+        setCurrentShaftThicknessPx(params.shaftThicknessPx);
+        setCurrentRearTaper(params.rearTaper);
+        setCurrentFrontTaper(params.frontTaper);
+        setCurrentHeadLengthPx(params.headLengthPx);
+        setCurrentHeadWidthPx(params.headWidthPx);
         setCurrentParamsBaseZoom(params.baseZoom ?? mapRef.current?.getZoom() ?? null);
     }, []);
     const handleSelectArrow = useCallback((arrowGroupToSelect, clickedLatLng = null) => {
@@ -437,7 +420,7 @@ const App = () => {
         if (!map)
             return;
         if (shapePickerRef.current) {
-            applyArrowParameters(arrowGroupToSelect.arrowParameters);
+            history.run(() => applyArrowParameters(arrowGroupToSelect.arrowParameters));
             setIsPickingShape(false);
             return;
         }
@@ -447,7 +430,7 @@ const App = () => {
         }
         if (editingState !== EditingState.Idle) {
             if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
-                finalizeCurrentArrow();
+                if (!finalizeCurrentArrow()) return;
             }
         }
         saveStateForCancel();
@@ -459,45 +442,26 @@ const App = () => {
         setCurrentArrowName(arrowGroupToSelect.arrowName);
         applyArrowParameters(arrowGroupToSelect.arrowParameters);
     }, [
-        editingState, saveStateForCancel, finalizeCurrentArrow, addAnchor, currentAnchors.length, applyArrowParameters
+        editingState, saveStateForCancel, finalizeCurrentArrow, addAnchor, currentAnchors.length, applyArrowParameters, history.run
     ]);
     useEffect(() => {
         handleSelectArrowRef.current = handleSelectArrow;
     }, [handleSelectArrow]);
     const restoreStateFromCancel = useCallback(() => {
+        const groups = savedArrowsBackup.map(buildSavedArrow);
+        if (groups.some(group => !group)) {
+            setEditorError('Der vorherige Stand konnte nicht wiederhergestellt werden. Die Bearbeitung bleibt offen.');
+            return false;
+        }
         arrowLayerRef.current?.clearLayers();
-        const map = mapRef.current;
-        if (!map)
-            return;
-        savedArrowsBackup.forEach(arrowData => {
-            const anchorsDataForGeom = arrowData.savedAnchors.map((sa) => createArrowAnchorData(sa));
-            const { centerline } = getValidPointsAndLength(map, anchorsDataForGeom);
-            if (!centerline || arrowData.arrowParameters.rearWidthPx === null || arrowData.arrowParameters.neckWidthPx === null || arrowData.arrowParameters.headLengthPx === null || arrowData.arrowParameters.headWidthPx === null)
-                return;
-            const scale = arrowData.arrowParameters.baseZoom !== null ? map.getZoomScale(map.getZoom(), arrowData.arrowParameters.baseZoom) : 1;
-            const outlinePoints = calculateArrowOutlinePolygons(centerline, (arrowData.arrowParameters.rearWidthPx ?? 0) * scale, (arrowData.arrowParameters.neckWidthPx ?? 0) * scale, (arrowData.arrowParameters.headWidthPx ?? 0) * scale, (arrowData.arrowParameters.headLengthPx ?? 0) * scale);
-            if (outlinePoints) {
-                const restoredGroup = L.layerGroup();
-                try {
-                    const latlngs = outlinePoints.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
-                    const shape = L.polygon(latlngs, { color: 'red', fillColor: 'red', fillOpacity: 0.5, weight: 1 });
-                    bindSavedArrow(shape, restoredGroup);
-                    restoredGroup.addLayer(shape);
-                    restoredGroup.savedAnchors = arrowData.savedAnchors;
-                    restoredGroup.arrowParameters = arrowData.arrowParameters;
-                    restoredGroup.arrowName = arrowData.arrowName;
-                    arrowLayerRef.current?.addLayer(restoredGroup);
-                }
-                catch (error) {
-                    console.error("Error restoring arrow shape:", error);
-                }
-            }
-        });
+        groups.forEach(group => arrowLayerRef.current?.addLayer(group));
         setArrowNameCounter(backupArrowNameCounter);
         clearBackupState();
-    }, [savedArrowsBackup, backupArrowNameCounter, clearBackupState, bindSavedArrow]);
+        return true;
+    }, [savedArrowsBackup, buildSavedArrow, backupArrowNameCounter, clearBackupState]);
     const handleConfirm = useCallback((incrementCounterAndUpdateBackup = true) => {
         const finalizedGroup = finalizeCurrentArrow();
+        if (!finalizedGroup) return null;
         if (finalizedGroup && editingState === EditingState.DrawingNew && incrementCounterAndUpdateBackup) {
             setArrowNameCounter(prev => prev + 1);
         }
@@ -509,9 +473,11 @@ const App = () => {
         if (incrementCounterAndUpdateBackup) {
             clearBackupState();
         }
+        return finalizedGroup;
     }, [finalizeCurrentArrow, editingState, resetCurrentPixelValues, clearBackupState, resetPreviousStationFrames]);
     const handleCancel = useCallback(() => {
-        restoreStateFromCancel();
+        if (!restoreStateFromCancel()) return;
+        setEditorError('');
         setEditingState(EditingState.Idle);
         setCurrentAnchors([]);
         setSelectedArrowGroup(null);
@@ -526,8 +492,8 @@ const App = () => {
             handleConfirm(true);
             return;
         }
-        handleCancel();
-    }, [editingState, currentAnchors.length, handleConfirm, handleCancel]);
+        setEditorError('Setze mindestens zwei unterschiedliche Stützpunkte, bevor du den Pfeil speicherst.');
+    }, [editingState, currentAnchors.length, handleConfirm]);
     const handleDrawArrow = useCallback(() => {
         if (editingState !== EditingState.Idle) {
             handleCancel();
@@ -544,6 +510,8 @@ const App = () => {
         setCurrentFrontTaper(defaultFrontTaper);
         setCurrentHeadLengthPx(DEFAULT_HEAD_LENGTH_PX);
         setCurrentHeadWidthPx(DEFAULT_HEAD_WIDTH_PX);
+        setCurrentParamsBaseZoom(mapRef.current?.getZoom() ?? null);
+        setEditorError('');
     }, [editingState, arrowNameCounter, resetCurrentPixelValues, handleCancel, saveStateForCancel, resetPreviousStationFrames]);
     const handleCopyArrow = useCallback(() => {
         const map = mapRef.current;
@@ -551,6 +519,7 @@ const App = () => {
             return;
         const currentAnchorsDataToCopy = getAnchorsData();
         const currentPixelParams = createArrowParameters({
+            shaftThicknessPx, rearTaper, frontTaper,
             rearWidthPx: rearWidthPx,
             neckWidthPx: neckWidthPx,
             headLengthPx: currentHeadLengthPx,
@@ -558,7 +527,7 @@ const App = () => {
             baseZoom: currentParamsBaseZoom,
         });
         const currentNameVal = currentArrowName;
-        handleConfirm(false);
+        if (!handleConfirm(false)) return;
         setEditingState(EditingState.DrawingNew);
         setSelectedArrowGroup(null);
         const firstAnchorLatlngLiteral = currentAnchorsDataToCopy[0].latlng;
@@ -592,42 +561,12 @@ const App = () => {
             return createArrowAnchorEntity({ id: newId, latlng: newLatLng, handle1: newH1, handle2: newH2 });
         });
         setCurrentAnchors(copiedAnchors);
-        const copiedRearWidth = currentPixelParams.rearWidthPx ?? DEFAULT_REAR_WIDTH_PX;
-        const copiedNeckWidth = currentPixelParams.neckWidthPx ?? DEFAULT_NECK_WIDTH_PX;
-        const copiedShaft = Math.max(2, (copiedRearWidth + copiedNeckWidth) / 2);
-        setCurrentShaftThicknessPx(copiedShaft);
-        setCurrentRearTaper(copiedRearWidth / copiedShaft);
-        setCurrentFrontTaper(copiedNeckWidth / copiedShaft);
-        setCurrentHeadLengthPx(currentPixelParams.headLengthPx);
-        setCurrentHeadWidthPx(currentPixelParams.headWidthPx);
-        setCurrentParamsBaseZoom(currentPixelParams.baseZoom);
+        applyArrowParameters(currentPixelParams);
         setCurrentArrowName(`${currentNameVal} (Kopie)`);
-    }, [editingState, currentAnchors.length, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, getAnchorsData, handleConfirm]);
+    }, [editingState, currentAnchors.length, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, getAnchorsData, handleConfirm, shaftThicknessPx, rearTaper, frontTaper, applyArrowParameters]);
     const handleDeleteSelectedArrow = useCallback(() => {
         if (editingState === EditingState.EditingSelected && selectedArrowGroup) {
-            // The selectedArrowGroup is already removed from arrowLayerRef.current.
-            // We need to ensure it's also removed from the `savedArrowsBackup` if it was there.
-            // This backup represents the state *before* this arrow was selected for editing.
-            const updatedBackup = savedArrowsBackup.filter(backupProps => {
-                // Attempt to identify if backupProps corresponds to selectedArrowGroup.
-                // This is imperfect without a stable ID. Comparing by name and structure.
-                if (backupProps.arrowName !== selectedArrowGroup.arrowName)
-                    return true;
-                if (backupProps.savedAnchors.length !== selectedArrowGroup.savedAnchors.length)
-                    return true;
-                // Deep compare anchors for more robustness if needed
-                let anchorsMatch = true;
-                for (let i = 0; i < backupProps.savedAnchors.length; i++) {
-                    const bsa = backupProps.savedAnchors[i];
-                    const ssa = selectedArrowGroup.savedAnchors[i];
-                    if (bsa.latlng.lat !== ssa.latlng.lat || bsa.latlng.lng !== ssa.latlng.lng) {
-                        anchorsMatch = false;
-                        break;
-                    }
-                    // Could also compare handles if necessary
-                }
-                return !anchorsMatch; // If they match, filter it out (return false)
-            });
+            const updatedBackup = savedArrowsBackup.filter(arrow => arrow.id !== selectedArrowGroup.arrowId);
             setSavedArrowsBackup(updatedBackup);
             // Transition to idle state
             setEditingState(EditingState.Idle);
@@ -639,8 +578,8 @@ const App = () => {
         }
     }, [editingState, selectedArrowGroup, resetCurrentPixelValues, savedArrowsBackup, resetPreviousStationFrames]);
     const handleShapeParamChange = useCallback((key, value) => {
-        const numericValue = Number(value);
-        if (!Number.isFinite(numericValue)) {
+        const numericValue = clampFormValue(key, value);
+        if (numericValue === null) {
             return;
         }
         const clampedValue = Math.max(0, numericValue);
@@ -756,6 +695,8 @@ const App = () => {
             return;
         const { map, drawingLayer, arrowLayer, editingArrowLayer, templateLayer } = setupLeafletMap(mapContainerRef.current);
         mapRef.current = map;
+        setMapZoom(map.getZoom());
+        map.on('zoomend', () => setMapZoom(map.getZoom()));
         templateLayerRef.current = templateLayer;
         drawingLayerRef.current = drawingLayer;
         arrowLayerRef.current = arrowLayer;
@@ -771,13 +712,13 @@ const App = () => {
         if (!map)
             return;
         const onMapClickHandler = (e) => {
-            if (shapePickerRef.current) return;
+            if (shapePickerRef.current || ignoreDragClickRef.current) return;
             if ((editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) && !isArrowDraggingRef.current) {
                 if (editingState === EditingState.DrawingNew) {
                     addAnchor(e.latlng, currentAnchors.length);
                     return;
                 }
-                endEditingSession();
+                history.run(endEditingSession);
             }
         };
         if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
@@ -789,9 +730,21 @@ const App = () => {
             map.getContainer().style.cursor = (editingState === EditingState.EditingSelected) ? 'default' : '';
         }
         return () => { map.off('click', onMapClickHandler); };
-    }, [editingState, currentAnchors.length, addAnchor, endEditingSession, isPickingShape]);
+    }, [editingState, currentAnchors.length, addAnchor, endEditingSession, isPickingShape, history.run]);
     useEffect(() => {
         const onWindowKeyDown = (event) => {
+            const editingField = event.target.closest?.('input:not([type=range]):not([type=checkbox]):not([type=file]), textarea, [contenteditable="true"]');
+            if ((event.ctrlKey || event.metaKey) && !event.altKey && !editingField) {
+                const key = event.key.toLowerCase();
+                if (key === 'z' || key === 'y') {
+                    event.preventDefault();
+                    if (!isSceneDraggingRef.current) {
+                        if (key === 'y' || event.shiftKey) history.redo();
+                        else history.undo();
+                    }
+                    return;
+                }
+            }
             if (isPickingShape) {
                 if (event.key === 'Escape') {
                     event.preventDefault();
@@ -803,18 +756,18 @@ const App = () => {
                 return;
             if (event.key === 'Escape') {
                 event.preventDefault();
-                handleCancel();
+                history.run(handleCancel);
             }
             else if (event.key === 'Enter' && !event.target.closest?.('input, textarea, select, button, [contenteditable="true"]')) {
                 event.preventDefault();
-                endEditingSession();
+                history.run(endEditingSession);
             }
         };
         window.addEventListener('keydown', onWindowKeyDown);
         return () => {
             window.removeEventListener('keydown', onWindowKeyDown);
         };
-    }, [editingState, endEditingSession, handleCancel, isPickingShape]);
+    }, [editingState, endEditingSession, handleCancel, isPickingShape, history.run, history.undo, history.redo]);
    useEffect(() => {
        if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
            updateCurveAndArrowPreview();
@@ -1003,6 +956,50 @@ const App = () => {
             });
         });
     }, [isPickingShape, currentAnchors]);
+    history.captureRef.current = () => ({
+        arrows: arrowLayerRef.current?.getLayers().map(getSavedArrowData) ?? [],
+        selectedArrow: selectedArrowGroup ? getSavedArrowData(selectedArrowGroup) : null,
+        editingState,
+        anchors: currentAnchors.map(anchor => ({ id: anchor.id, ...createArrowAnchorData(anchor) })),
+        parameters: { shaftThicknessPx: currentShaftThicknessPx, rearTaper: currentRearTaper,
+            frontTaper: currentFrontTaper, headLengthPx: currentHeadLengthPx,
+            headWidthPx: currentHeadWidthPx, baseZoom: currentParamsBaseZoom },
+        name: currentArrowName,
+        counter: arrowNameCounter,
+        backup: savedArrowsBackup.map(createPersistedArrow),
+        backupCounter: backupArrowNameCounter,
+    });
+    history.restoreRef.current = snapshot => {
+        const groups = snapshot.arrows.map(buildSavedArrow);
+        const selected = snapshot.selectedArrow ? buildSavedArrow(snapshot.selectedArrow) : null;
+        if (groups.some(group => !group) || (snapshot.selectedArrow && !selected)) {
+            setEditorError('Der Verlauf konnte nicht wiederhergestellt werden. Der aktuelle Stand bleibt erhalten.');
+            return false;
+        }
+        arrowLayerRef.current?.clearLayers();
+        groups.forEach(group => arrowLayerRef.current?.addLayer(group));
+        setEditingState(snapshot.editingState);
+        setCurrentAnchors(snapshot.anchors.map(createArrowAnchorEntity));
+        setSelectedArrowGroup(selected);
+        const params = snapshot.parameters;
+        setCurrentShaftThicknessPx(params.shaftThicknessPx);
+        setCurrentRearTaper(params.rearTaper);
+        setCurrentFrontTaper(params.frontTaper);
+        setCurrentHeadLengthPx(params.headLengthPx);
+        setCurrentHeadWidthPx(params.headWidthPx);
+        setCurrentParamsBaseZoom(params.baseZoom);
+        setCurrentArrowName(snapshot.name);
+        setArrowNameCounter(snapshot.counter);
+        setSavedArrowsBackup(snapshot.backup);
+        setBackupArrowNameCounter(snapshot.backupCounter);
+        setIsPickingShape(false);
+        setEditorError('');
+        resetPreviousStationFrames();
+        return true;
+    };
+    useEffect(() => {
+        setEditorError('');
+    }, [currentAnchors, currentShaftThicknessPx, currentRearTaper, currentFrontTaper, currentHeadLengthPx, currentHeadWidthPx]);
     // Control panel contract
     const canEditParameters = getCanEditParameters(editingState) && currentAnchors.length >= 2;
     const canCopyCurrentArrow = isEditing(editingState) && currentAnchors.length >= 2;
@@ -1011,6 +1008,11 @@ const App = () => {
     const canSaveAllGeoJsonExport = getCanSaveAllGeoJson(editingState, arrowLayerRef.current?.getLayers().length ?? 0);
     const controlPanelUiState = {
         editingState,
+        editorError,
+        canUndo: history.canUndo,
+        canRedo: history.canRedo,
+        parameterBaseZoom: currentParamsBaseZoom,
+        mapZoom,
         anchorCount: currentAnchors.length,
         canFinishArrow: isEditing(editingState) && currentAnchors.length >= 2,
         canCopyArrow: canCopyCurrentArrow,
@@ -1032,15 +1034,19 @@ const App = () => {
         onToggleShapePicker: () => setIsPickingShape(previous => !previous),
         onLoadTemplate: handleLoadTemplate,
         onClearTemplate: handleClearTemplate,
-        onDrawArrow: handleDrawArrow,
-        onFinishArrow: endEditingSession,
-        onCancelArrow: handleCancel,
-        onCopyArrow: handleCopyArrow,
-        onDeleteArrow: handleDeleteSelectedArrow,
-        onArrowNameChange: setCurrentArrowName,
+        onUndo: history.undo,
+        onRedo: history.redo,
+        onBeginChange: history.begin,
+        onEndChange: history.end,
+        onDrawArrow: () => history.run(handleDrawArrow),
+        onFinishArrow: () => history.run(endEditingSession),
+        onCancelArrow: () => history.run(handleCancel),
+        onCopyArrow: () => history.run(handleCopyArrow),
+        onDeleteArrow: () => history.run(handleDeleteSelectedArrow),
+        onArrowNameChange: value => history.run(() => setCurrentArrowName(value)),
         onCopyGeoJson: handleCopyGeoJson,
         onSaveAllGeoJson: handleSaveAllGeoJson,
-        onShapeParamChange: handleShapeParamChange,
+        onShapeParamChange: (key, value) => history.run(() => handleShapeParamChange(key, value)),
     };
     return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { uiState: controlPanelUiState, actions: controlPanelActions })] }));
 };
