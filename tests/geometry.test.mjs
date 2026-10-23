@@ -117,3 +117,37 @@ test('more than one hundred anchors are included in the outline', () => {
   assertValidOutline(polygons);
   assert.ok(polygons.flat(2).some(p => Math.abs(p.x - 1785) < 0.001 && Math.abs(p.y - Math.sin(119 / 6) * 50) < 0.001));
 });
+
+test('curved shaft and head meet without an inward hairline', () => {
+  // This shallow curve used to produce a 51 px backtracking edge at the neck.
+  const data = [
+    { latlng: { lng: 260, lat: -200 }, handle2: { lng: 282.1132283657789, lat: 125.41373248677701 } },
+    { latlng: { lng: 330, lat: 640 }, handle1: { lng: 320.0092197395861, lat: 472.2227869788185 } },
+  ];
+  const map = { latLngToLayerPoint: ({ lat, lng }) => ({ x: Math.round(lng), y: Math.round(lat) }) };
+  const centerline = buildArrowCenterline(map, data);
+  const polygons = calculateArrowOutlinePolygons(centerline, 140, 160, 360, 500);
+  assertValidOutline(polygons);
+  assert.equal(polygons.length, 1);
+  assert.equal(polygons[0].length, 1, 'no narrow hole between shaft and head');
+  const ring = polygons[0][0].slice(0, -1);
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[(i + ring.length - 1) % ring.length];
+    const b = ring[i];
+    const c = ring[(i + 1) % ring.length];
+    const u = { x: b.x - a.x, y: b.y - a.y };
+    const v = { x: c.x - b.x, y: c.y - b.y };
+    const lengths = [Math.hypot(u.x, u.y), Math.hypot(v.x, v.y)];
+    const backtracks = u.x * v.x + u.y * v.y < 0;
+    const angleSine = Math.abs(u.x * v.y - u.y * v.x) / (lengths[0] * lengths[1]);
+    assert.ok(!(backtracks && angleSine < 0.001 && Math.min(...lengths) > 2), 'neck has a visible inward spur');
+  }
+});
+
+
+test('head retains its tip when the neck lands on a right-angle anchor', () => {
+  const centerline = buildArrowCenterline(mapAtScale(), anchors([[0, 0], [200, 0], [200, 200]]));
+  const polygons = calculateArrowOutlinePolygons(centerline, 20, 16, 36, 200);
+  assertValidOutline(polygons);
+  assert.ok(polygons.flat(2).some(p => Math.abs(p.x - 200) < 0.001 && Math.abs(p.y - 200) < 0.001));
+});

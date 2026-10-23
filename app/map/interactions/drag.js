@@ -55,3 +55,66 @@ export function translateAnchorsByDelta(map, prevAnchors, delta, initialAnchors,
 }
 
 export { pointSubtract };
+
+/**
+ * Keep a short click for selection, and move a saved arrow without selecting it
+ * once the pointer travels at least three pixels. Document listeners also catch
+ * releases outside the map, so map dragging is always restored.
+ */
+export function bindSavedArrowInteractions(map, shape, arrowGroup, { canDrag, onClick }) {
+  let activeDrag = null;
+  let suppressClick = false;
+  const projectRings = rings => rings.map(value => Array.isArray(value)
+    ? projectRings(value)
+    : map.latLngToLayerPoint(value));
+  const translateRings = (rings, delta) => rings.map(value => Array.isArray(value)
+    ? translateRings(value, delta)
+    : map.layerPointToLatLng(L.point(value.x + delta.x, value.y + delta.y)));
+  const onMove = event => {
+    if (!activeDrag) return;
+    const delta = pointSubtract(getContainerPoint(map, event), activeDrag.start);
+    if (!suppressClick && Math.hypot(delta.x, delta.y) < 3) return;
+    suppressClick = true;
+    event.preventDefault();
+    shape.setLatLngs(translateRings(activeDrag.rings, delta));
+    const initial = activeDrag.points;
+    arrowGroup.savedAnchors = translateAnchorsByDelta(map, activeDrag.anchors, delta, initial.anchor, initial.handle1, initial.handle2);
+  };
+  const stop = () => {
+    if (!activeDrag) return;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', stop);
+    window.removeEventListener('blur', stop);
+    map.getContainer().style.cursor = activeDrag.cursor;
+    if (activeDrag.mapDraggingEnabled) map.dragging.enable();
+    activeDrag = null;
+  };
+  shape.on('mousedown', event => {
+    suppressClick = false;
+    if (!canDrag() || event.originalEvent?.button !== 0) return;
+    L.DomEvent.stop(event.originalEvent);
+    const anchors = arrowGroup.savedAnchors;
+    activeDrag = {
+      start: getContainerPoint(map, event.originalEvent),
+      anchors,
+      points: getInitialLayerPoints(map, anchors),
+      rings: projectRings(shape.getLatLngs()),
+      cursor: map.getContainer().style.cursor,
+      mapDraggingEnabled: map.dragging.enabled(),
+    };
+    map.dragging.disable();
+    map.getContainer().style.cursor = 'grabbing';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', stop);
+    window.addEventListener('blur', stop);
+  });
+  shape.on('click', event => {
+    L.DomEvent.stopPropagation(event);
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
+    onClick(event);
+  });
+  shape.on('remove', stop);
+}

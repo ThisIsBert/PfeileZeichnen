@@ -392,6 +392,21 @@ export function calculateArrowOutlinePolygons(centerline, rearWidthPx, neckWidth
     const totalLength = centerline.totalLength;
     headLengthPx = Math.min(safeWidth(headLengthPx), totalLength);
     const neckS = totalLength - headLengthPx;
+    // Both parts meet in the same cross-section. Using separate chord normals
+    // leaves a narrow wedge at curved necks that renders as an inward line.
+    const neckStation = sampleCenterlineAtDistance(centerline, neckS);
+    let neckNormal = null;
+    if (neckStation) {
+        // At an anchor the incoming and outgoing directions can differ. Their
+        // bisector gives both parts a usable cross-section, even at right angles.
+        const adjacentDistance = Math.min(0.1, totalLength / 1000);
+        const before = sampleCenterlineAtDistance(centerline, neckS - adjacentDistance);
+        const after = sampleCenterlineAtDistance(centerline, neckS + adjacentDistance);
+        const incoming = normalize(pointSubtract(neckStation.pt, before.pt));
+        const outgoing = normalize(pointSubtract(after.pt, neckStation.pt));
+        const bisector = normalize(pointAdd(incoming, outgoing));
+        neckNormal = perpendicular(pointLength(bisector) > 1e-6 ? bisector : neckStation.tangent);
+    }
     const pieces = [];
     const addPiece = points => {
         // Integer coordinates make unions stable at shared and nearly collinear
@@ -438,11 +453,15 @@ export function calculateArrowOutlinePolygons(centerline, rearWidthPx, neckWidth
             const end = b.s < totalLength ? pointAdd(b.pt, pointMultiply(tangent, 1 / 128)) : b.pt;
             const rA = halfWidth(a);
             const rB = halfWidth(b);
+            const sharedNormal = neckNormal && neckNormal.x * normal.x + neckNormal.y * normal.y < 0
+                ? pointMultiply(neckNormal, -1) : neckNormal;
+            const startNormal = sharedNormal && Math.abs(a.s - neckS) < 1e-6 ? sharedNormal : normal;
+            const endNormal = sharedNormal && Math.abs(b.s - neckS) < 1e-6 ? sharedNormal : normal;
             addPiece([
-                pointAdd(start, pointMultiply(normal, rA)),
-                pointAdd(end, pointMultiply(normal, rB)),
-                pointSubtract(end, pointMultiply(normal, rB)),
-                pointSubtract(start, pointMultiply(normal, rA)),
+                pointAdd(start, pointMultiply(startNormal, rA)),
+                pointAdd(end, pointMultiply(endNormal, rB)),
+                pointSubtract(end, pointMultiply(endNormal, rB)),
+                pointSubtract(start, pointMultiply(startNormal, rA)),
             ]);
             if (previousNormal && rA > 1e-6) {
                 const cross = previousNormal.x * normal.y - previousNormal.y * normal.x;

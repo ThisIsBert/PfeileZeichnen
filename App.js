@@ -8,7 +8,7 @@ import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpend
 import { setupLeafletMap, teardownLeafletMap } from './app/map/lifecycle.js';
 import { findClosestCurveSegmentIndex } from './app/map/interactions/click.js';
 import { insertAnchorWithAlignedHandles } from './app/map/interactions/handleUpdates.js';
-import { getContainerPoint, getInitialLayerPoints, translateAnchorsByDelta } from './app/map/interactions/drag.js';
+import { getContainerPoint, getInitialLayerPoints, translateAnchorsByDelta, bindSavedArrowInteractions } from './app/map/interactions/drag.js';
 import { generateGeoJsonForArrow } from './app/io/exportGeoJson.js';
 import { canDeleteArrow as getCanDeleteArrow, canEditParameters as getCanEditParameters, canSaveAllGeoJson as getCanSaveAllGeoJson, isEditing } from './app/state/editingState.js';
 import { fromArrowAnchorData, toArrowAnchorData } from './app/adapters/leafletArrowAdapter.js';
@@ -20,6 +20,8 @@ const App = () => {
     const arrowLayerRef = useRef(null);
     const editingArrowLayerRef = useRef(null);
     const [editingState, setEditingState] = useState(EditingState.Idle);
+    const editingStateRef = useRef(editingState);
+    editingStateRef.current = editingState;
     const [currentAnchors, setCurrentAnchors] = useState([]);
     const [selectedArrowGroup, setSelectedArrowGroup] = useState(null);
     const [currentShaftThicknessPx, setCurrentShaftThicknessPx] = useState(null);
@@ -38,6 +40,12 @@ const App = () => {
     const initialHandle1LayerPointsRef = useRef([]);
     const initialHandle2LayerPointsRef = useRef([]);
     const handleSelectArrowRef = useRef(null);
+    const bindSavedArrow = useCallback((shape, arrowGroup) => {
+        bindSavedArrowInteractions(mapRef.current, shape, arrowGroup, {
+            canDrag: () => editingStateRef.current === EditingState.Idle,
+            onClick: event => handleSelectArrowRef.current?.(arrowGroup, event.latlng),
+        });
+    }, []);
     // Refs for Leaflet objects
     const anchorMarkersRef = useRef(new Map());
     const handle1MarkersRef = useRef(new Map());
@@ -378,12 +386,7 @@ const App = () => {
             const outlineLatLngs = outlinePoints.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
             if (outlineLatLngs.length > 0) {
                 const finalShape = L.polygon(outlineLatLngs, { color: 'red', fillColor: 'red', fillOpacity: 0.5, weight: 1 });
-                finalShape.on('click', (ev) => {
-                    L.DomEvent.stopPropagation(ev);
-                    if (handleSelectArrowRef.current) {
-                        handleSelectArrowRef.current(newArrowGroup, ev.latlng);
-                    }
-                });
+                bindSavedArrow(finalShape, newArrowGroup);
                 newArrowGroup.addLayer(finalShape);
             }
             else {
@@ -406,7 +409,7 @@ const App = () => {
     }, [
         currentAnchors, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper,
         DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentHeadLengthPx, currentHeadWidthPx,
-        currentArrowName, arrowNameCounter, selectedArrowGroup, currentParamsBaseZoom
+        currentArrowName, arrowNameCounter, selectedArrowGroup, currentParamsBaseZoom, bindSavedArrow
     ]);
     const handleSelectArrow = useCallback((arrowGroupToSelect, clickedLatLng = null) => {
         const map = mapRef.current;
@@ -460,12 +463,7 @@ const App = () => {
                 try {
                     const latlngs = outlinePoints.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
                     const shape = L.polygon(latlngs, { color: 'red', fillColor: 'red', fillOpacity: 0.5, weight: 1 });
-                    shape.on('click', (ev) => {
-                        L.DomEvent.stopPropagation(ev);
-                        if (handleSelectArrowRef.current) {
-                            handleSelectArrowRef.current(restoredGroup, ev.latlng);
-                        }
-                    });
+                    bindSavedArrow(shape, restoredGroup);
                     restoredGroup.addLayer(shape);
                     restoredGroup.savedAnchors = arrowData.savedAnchors;
                     restoredGroup.arrowParameters = arrowData.arrowParameters;
@@ -479,7 +477,7 @@ const App = () => {
         });
         setArrowNameCounter(backupArrowNameCounter);
         clearBackupState();
-    }, [savedArrowsBackup, backupArrowNameCounter, clearBackupState]);
+    }, [savedArrowsBackup, backupArrowNameCounter, clearBackupState, bindSavedArrow]);
     const handleConfirm = useCallback((incrementCounterAndUpdateBackup = true) => {
         const finalizedGroup = finalizeCurrentArrow();
         if (finalizedGroup && editingState === EditingState.DrawingNew && incrementCounterAndUpdateBackup) {

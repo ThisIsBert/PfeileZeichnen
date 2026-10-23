@@ -23,6 +23,7 @@ Runtime CDN imports are pinned and documented in `DEPENDENCIES.md`.
 
 - Click **Neuen Pfeil zeichnen**, then click the map for each anchor. There is no fixed anchor limit.
 - Click **Fertig** or press Enter to save. **Abbrechen** or Escape discards the current session.
+- Click, hold and drag an unselected saved arrow to move it as a whole. A short click selects it.
 - Select a saved arrow to edit its anchors and Bezier handles. Shift-click its outline to insert another anchor.
 - The outline uses tapered strips with round joins and a curved head. Overlaps are merged; loops retain holes.
 - Preview, saved arrows, and GeoJSON share the same outline. Exports use Polygon (or MultiPolygon when necessary), with closed rings and preserved holes.
