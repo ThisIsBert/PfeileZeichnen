@@ -10,6 +10,7 @@ This app is a no-build static site. Runtime module resolution is controlled by t
 | `react/` | `https://esm.sh/react@19.1.0/` | React subpath imports. |
 | `react-dom/` | `https://esm.sh/react-dom@19.1.0/` | React DOM subpath imports (for `react-dom/client`). |
 | `leaflet` | `https://esm.sh/leaflet@1.9.4` | ESM module import for app code. |
+| `clipper-lib` | `https://esm.sh/clipper-lib@6.4.2?bundle` | Union of tapered arrow strips and round joins; preserves holes at loops. |
 
 ## Update policy
 

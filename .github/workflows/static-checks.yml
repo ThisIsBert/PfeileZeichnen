@@ -19,6 +19,12 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install test dependencies
+        run: npm ci
+
+      - name: Test arrow geometry and GeoJSON
+        run: npm test
+
       - name: Run lint
         run: npm run lint
 

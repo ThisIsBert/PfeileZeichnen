@@ -1,43 +1,6 @@
-import L from 'leaflet';
-import { getValidPointsAndLength, calculateArrowOutlinePoints, sampleCenterlineAtDistance } from '../geometry/index.js';
+import { getValidPointsAndLength, calculateArrowOutlinePolygons } from '../geometry/index.js';
 
 const GEOJSON_MAX_SEGMENT_LENGTH_PX = 4;
-const GEOJSON_CENTERLINE_STEP_PX = 2;
-
-function buildExportCenterline(centerline, maxStepPx = GEOJSON_CENTERLINE_STEP_PX) {
-  if (!centerline || centerline.totalLength <= 0 || maxStepPx <= 0) {
-    return centerline;
-  }
-
-  const stepCount = Math.max(1, Math.ceil(centerline.totalLength / maxStepPx));
-  const samples = [];
-  const points = [];
-  const cumLengths = [];
-  const sampleContext = {};
-
-  for (let i = 0; i <= stepCount; i++) {
-    const s = (i / stepCount) * centerline.totalLength;
-    const station = sampleCenterlineAtDistance(centerline, s, sampleContext);
-    if (!station) {
-      continue;
-    }
-    samples.push(station);
-    points.push(station.pt);
-    cumLengths.push(station.s);
-  }
-
-  if (samples.length < 2) {
-    return centerline;
-  }
-
-  return {
-    ...centerline,
-    samples,
-    points,
-    cumLengths,
-  };
-}
-
 function densifyOutlinePoints(points, maxSegmentLengthPx = GEOJSON_MAX_SEGMENT_LENGTH_PX) {
   if (!Array.isArray(points) || points.length < 2 || maxSegmentLengthPx <= 0) {
     return points;
@@ -73,7 +36,7 @@ function densifyOutlinePoints(points, maxSegmentLengthPx = GEOJSON_MAX_SEGMENT_L
 export function generateGeoJsonForArrow(map, anchorsData, params, name) {
   if (!map || anchorsData.length < 2) return null;
 
-  const { pts, totalLength, cumLengths, centerline } = getValidPointsAndLength(map, anchorsData);
+  const { pts, centerline } = getValidPointsAndLength(map, anchorsData);
   if (pts.length < 2) return null;
 
   let rearWidthPx = params.rearWidthPx ?? 0;
@@ -87,37 +50,27 @@ export function generateGeoJsonForArrow(map, anchorsData, params, name) {
   headWidthPx *= scale;
   headLengthPx *= scale;
 
-  const exportCenterline = centerline ? buildExportCenterline(centerline) : null;
-
-  const outlinePoints = exportCenterline
-    ? calculateArrowOutlinePoints(exportCenterline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx)
-    : calculateArrowOutlinePoints(pts, totalLength, cumLengths, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
-  if (!outlinePoints) return null;
+  const polygons = calculateArrowOutlinePolygons(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx);
+  if (!polygons) return null;
 
   try {
-    const smoothOutlinePoints = densifyOutlinePoints(outlinePoints);
-    const coordinates = [smoothOutlinePoints.map((p) => {
-      const latLng = map.layerPointToLatLng(L.point(p.x, p.y)).wrap();
-      return [latLng.lng, latLng.lat];
-    })];
-
-    if (coordinates[0].length > 0) {
-      const first = coordinates[0][0];
-      const last = coordinates[0][coordinates[0].length - 1];
-      if (first[0] !== last[0] || first[1] !== last[1]) {
-        coordinates[0].push([...first]);
-      }
-    }
-
-    if (coordinates[0].length < 4) {
-      console.error('GeoJSON generation: Not enough points for polygon.', coordinates[0]);
-      return null;
-    }
+    // Leaflet screen y increases downward; reverse rings for GeoJSON winding.
+    const coordinates = polygons.map(polygon => polygon.map(ring => {
+      const coordinates = densifyOutlinePoints(ring).reverse().map(p => {
+        const latLng = map.layerPointToLatLng(p).wrap();
+        return [latLng.lng, latLng.lat];
+      });
+      // Use the exact first position to close each outer ring and hole.
+      coordinates[coordinates.length - 1] = [...coordinates[0]];
+      return coordinates;
+    }));
 
     return {
       type: 'Feature',
       properties: { name },
-      geometry: { type: 'Polygon', coordinates },
+      geometry: coordinates.length === 1
+        ? { type: 'Polygon', coordinates: coordinates[0] }
+        : { type: 'MultiPolygon', coordinates },
     };
   } catch (error) {
     console.error('Error converting points to GeoJSON:', error);

@@ -11,7 +11,7 @@ import { createArrowAnchorEntity, createLatLngLiteral } from '../../types/arrowM
  * @param {string} newAnchorId
  */
 export function insertAnchorWithAlignedHandles(map, prevAnchors, newAnchorLatLng, index, newAnchorId) {
-  const updatedAnchors = [...prevAnchors];
+  const updatedAnchors = prevAnchors.map(anchor => ({ ...anchor }));
   updatedAnchors.splice(index, 0, createArrowAnchorEntity({
     id: newAnchorId,
     latlng: createLatLngLiteral(newAnchorLatLng),
@@ -27,7 +27,7 @@ export function insertAnchorWithAlignedHandles(map, prevAnchors, newAnchorLatLng
       const vec = pointSubtract(pNew, pPrev);
       const len = pointLength(vec);
       if (len > 1e-6) {
-        const offsetVec = pointMultiply(vec, HANDLE_OFFSET_ON_LINE_PIXELS / len);
+        const offsetVec = pointMultiply(vec, Math.min(HANDLE_OFFSET_ON_LINE_PIXELS, len / 3) / len);
         const prevAnchorH2Pos = pointAdd(pPrev, offsetVec);
         prevAnchor.handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(prevAnchorH2Pos.x, prevAnchorH2Pos.y)));
         const newAnchorH1Pos = pointSubtract(pNew, offsetVec);
@@ -46,7 +46,7 @@ export function insertAnchorWithAlignedHandles(map, prevAnchors, newAnchorLatLng
       const vec = pointSubtract(pNext, pNew);
       const len = pointLength(vec);
       if (len > 1e-6) {
-        const offsetVec = pointMultiply(vec, HANDLE_OFFSET_ON_LINE_PIXELS / len);
+        const offsetVec = pointMultiply(vec, Math.min(HANDLE_OFFSET_ON_LINE_PIXELS, len / 3) / len);
         const newAnchorH2Pos = pointAdd(pNew, offsetVec);
         updatedAnchors[index].handle2 = createLatLngLiteral(map.layerPointToLatLng(L.point(newAnchorH2Pos.x, newAnchorH2Pos.y)));
         const nextAnchorH1Pos = pointSubtract(pNext, offsetVec);

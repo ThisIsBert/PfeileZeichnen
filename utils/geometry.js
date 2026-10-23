@@ -1,4 +1,4 @@
-import L from 'leaflet';
+import ClipperLib from 'clipper-lib';
 // Point here refers to our custom {x, y} type. Leaflet's L.Point also has x, y properties.
 export function pointSubtract(p1, p2) { return { x: p1.x - p2.x, y: p1.y - p2.y }; }
 export function pointAdd(p1, p2) { return { x: p1.x + p2.x, y: p1.y + p2.y }; }
@@ -162,53 +162,19 @@ export function sampleCenterlineAtDistance(centerline, s, stationContext = null)
     const lowerIdx = Math.max(0, upperIdx - 1);
     const lower = samples[lowerIdx];
     const upper = samples[Math.min(samples.length - 1, upperIdx)];
-    let segment = centerline.segments[upper.segIndex] ?? centerline.segments[lower.segIndex];
+    // At a segment boundary, the lower sample can belong to the previous
+    // cubic. Its endpoint is t=0 on the next cubic; never snap to a junction.
+    const segment = centerline.segments[upper.segIndex];
     if (!segment) {
-        return null;
+        const ratio = upper.s > lower.s ? (clampedS - lower.s) / (upper.s - lower.s) : 0;
+        const pt = pointAdd(lower.pt, pointMultiply(pointSubtract(upper.pt, lower.pt), ratio));
+        const tangent = normalize(pointSubtract(upper.pt, lower.pt));
+        return { ...upper, s: clampedS, pt, tangent, normal: perpendicular(tangent) };
     }
-    let t = upper.t;
-    let sampledTangentResult = null;
-    if (upper.s > lower.s + 1e-9 && lower.segIndex === upper.segIndex) {
-        const ratio = (clampedS - lower.s) / (upper.s - lower.s);
-        t = lower.t + (upper.t - lower.t) * ratio;
-        segment = centerline.segments[lower.segIndex] ?? segment;
-        sampledTangentResult = tangentWithFallback(segment, t, lower, upper, stationContext);
-    }
-    else if (lower.segIndex !== upper.segIndex && upper.s > lower.s + 1e-9) {
-        const ratio = (clampedS - lower.s) / (upper.s - lower.s);
-        const lowerSegment = centerline.segments[lower.segIndex];
-        const upperSegment = centerline.segments[upper.segIndex];
-        const lowerDist = Math.abs(clampedS - lower.s);
-        const upperDist = Math.abs(upper.s - clampedS);
-        const lowerWeight = 1 - ratio;
-        const upperWeight = ratio;
-        const lowerResult = lowerSegment
-            ? tangentWithFallback(lowerSegment, 1, samples[Math.max(0, lowerIdx - 1)], lower, stationContext)
-            : null;
-        const upperResult = upperSegment
-            ? tangentWithFallback(upperSegment, 0, upper, samples[Math.min(samples.length - 1, upperIdx + 1)], stationContext)
-            : null;
-        let blendedTangent = null;
-        if (lowerResult?.tangent && upperResult?.tangent) {
-            const alignedUpper = ((lowerResult.tangent.x * upperResult.tangent.x) + (lowerResult.tangent.y * upperResult.tangent.y)) < 0
-                ? pointMultiply(upperResult.tangent, -1)
-                : upperResult.tangent;
-            blendedTangent = normalize(pointAdd(pointMultiply(lowerResult.tangent, lowerWeight), pointMultiply(alignedUpper, upperWeight)));
-        }
-        sampledTangentResult = blendedTangent && pointLength(blendedTangent) > 1e-9
-            ? { tangent: blendedTangent, mode: 'derivative-blend' }
-            : (lowerDist <= upperDist ? lowerResult : upperResult);
-        t = lowerDist <= upperDist ? 1 : 0;
-        segment = lowerDist <= upperDist ? (lowerSegment ?? segment) : (upperSegment ?? segment);
-    }
-    else if (Math.abs(clampedS - lower.s) < Math.abs(upper.s - clampedS)) {
-        t = lower.t;
-        segment = centerline.segments[lower.segIndex] ?? segment;
-        sampledTangentResult = tangentWithFallback(segment, t, lower, upper, stationContext);
-    }
-    if (!sampledTangentResult) {
-        sampledTangentResult = tangentWithFallback(segment, t, lower, upper, stationContext);
-    }
+    const ratio = upper.s > lower.s + 1e-9 ? (clampedS - lower.s) / (upper.s - lower.s) : 1;
+    const lowerT = lower.segIndex === upper.segIndex ? lower.t : 0;
+    const t = lowerT + (upper.t - lowerT) * ratio;
+    const sampledTangentResult = tangentWithFallback(segment, t, lower, upper, stationContext);
     const pt = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
     const sampledTangent = sampledTangentResult?.tangent ?? null;
     const reference = Math.abs(clampedS - lower.s) <= Math.abs(upper.s - clampedS) ? lower.normal : upper.normal;
@@ -242,11 +208,11 @@ export function buildArrowCenterline(map, currentAnchorsData) {
         const a1Data = currentAnchorsData[i];
         if (!a0Data?.latlng || !a1Data?.latlng)
             continue;
-        const p0 = map.latLngToLayerPoint(L.latLng(a0Data.latlng.lat, a0Data.latlng.lng));
-        const cp1 = map.latLngToLayerPoint(a0Data.handle2 ? L.latLng(a0Data.handle2.lat, a0Data.handle2.lng) : L.latLng(a0Data.latlng.lat, a0Data.latlng.lng));
-        const cp2 = map.latLngToLayerPoint(a1Data.handle1 ? L.latLng(a1Data.handle1.lat, a1Data.handle1.lng) : L.latLng(a1Data.latlng.lat, a1Data.latlng.lng));
-        const p3 = map.latLngToLayerPoint(L.latLng(a1Data.latlng.lat, a1Data.latlng.lng));
-        segments.push({ index: i - 1, p0, cp1, cp2, p3 });
+        const p0 = map.latLngToLayerPoint({ lat: a0Data.latlng.lat, lng: a0Data.latlng.lng });
+        const cp1 = map.latLngToLayerPoint(a0Data.handle2 ? { lat: a0Data.handle2.lat, lng: a0Data.handle2.lng } : { lat: a0Data.latlng.lat, lng: a0Data.latlng.lng });
+        const cp2 = map.latLngToLayerPoint(a1Data.handle1 ? { lat: a1Data.handle1.lat, lng: a1Data.handle1.lng } : { lat: a1Data.latlng.lat, lng: a1Data.latlng.lng });
+        const p3 = map.latLngToLayerPoint({ lat: a1Data.latlng.lat, lng: a1Data.latlng.lng });
+        segments.push({ index: segments.length, anchorIndex: i - 1, p0, cp1, cp2, p3 });
     }
     let s = 0;
     let prevSample = null;
@@ -255,8 +221,6 @@ export function buildArrowCenterline(map, currentAnchorsData) {
         const ts = densifyTValues(adaptiveCubicTValues(segment.p0, segment.cp1, segment.cp2, segment.p3));
         for (let idx = 0; idx < ts.length; idx++) {
             const t = ts[idx];
-            if (samples.length > 0 && idx === 0)
-                continue;
             const pt = cubicBezier(segment.p0, segment.cp1, segment.cp2, segment.p3, t);
             if (prevSample) {
                 s += pointLength(pointSubtract(pt, prevSample.pt));
@@ -272,7 +236,7 @@ export function buildArrowCenterline(map, currentAnchorsData) {
     }
     const points = samples.map(sample => sample.pt);
     const cumLengths = samples.map(sample => sample.s);
-    const validCurveData = samples.map(sample => ({ pt: sample.pt, segIndex: sample.segIndex }));
+    const validCurveData = samples.map(sample => ({ pt: sample.pt, segIndex: segments[sample.segIndex].anchorIndex }));
     return { segments, samples, points, cumLengths, totalLength: samples.length > 0 ? samples[samples.length - 1].s : 0, validCurveData };
 }
 export function computeCumulativeLengths(points) {
@@ -322,10 +286,10 @@ export function computeCurvePoints(map, currentAnchorsData) {
             console.warn("computeCurvePoints: Skipping segment due to missing anchor or latlng", i - 1, i);
             continue;
         }
-        const a0LatLng = L.latLng(a0Data.latlng.lat, a0Data.latlng.lng);
-        const a1LatLng = L.latLng(a1Data.latlng.lat, a1Data.latlng.lng);
-        const handle1Latlng = a0Data.handle2 ? L.latLng(a0Data.handle2.lat, a0Data.handle2.lng) : a0LatLng;
-        const handle2Latlng = a1Data.handle1 ? L.latLng(a1Data.handle1.lat, a1Data.handle1.lng) : a1LatLng;
+        const a0LatLng = { lat: a0Data.latlng.lat, lng: a0Data.latlng.lng };
+        const a1LatLng = { lat: a1Data.latlng.lat, lng: a1Data.latlng.lng };
+        const handle1Latlng = a0Data.handle2 ? { lat: a0Data.handle2.lat, lng: a0Data.handle2.lng } : a0LatLng;
+        const handle2Latlng = a1Data.handle1 ? { lat: a1Data.handle1.lat, lng: a1Data.handle1.lng } : a1LatLng;
         try {
             const p0 = map.latLngToLayerPoint(a0LatLng); // L.Point
             const cp1 = map.latLngToLayerPoint(handle1Latlng); // L.Point
@@ -411,6 +375,118 @@ function toLegacyCenterline(pts, totalLength, cumLengths) {
         validCurveData: samples.map(sample => ({ pt: sample.pt, segIndex: sample.segIndex })),
     };
 }
+/**
+ * Sweep tapered strips along the centerline, with round joins at bends.
+ * Union removes overlaps at tight turns and crossings, preserving any holes.
+ * Returns MultiPolygon-shaped arrays of polygons, rings and {x, y} points.
+ * The preview, saved arrows and GeoJSON all use this same geometry.
+ */
+export function calculateArrowOutlinePolygons(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx) {
+    if (!centerline || centerline.points.length < 2 || centerline.totalLength <= 1e-6) {
+        return null;
+    }
+    const safeWidth = value => Number.isFinite(value) ? Math.max(0, value) : 0;
+    rearWidthPx = safeWidth(rearWidthPx);
+    neckWidthPx = safeWidth(neckWidthPx);
+    headWidthPx = safeWidth(headWidthPx);
+    const totalLength = centerline.totalLength;
+    headLengthPx = Math.min(safeWidth(headLengthPx), totalLength);
+    const neckS = totalLength - headLengthPx;
+    const pieces = [];
+    const addPiece = points => {
+        // Integer coordinates make unions stable at shared and nearly collinear
+        // edges. 1/1024 px is well below the precision needed for map display.
+        const path = points.map(p => ({ X: Math.round(p.x * 1024), Y: Math.round(p.y * 1024) }));
+        if (!ClipperLib.Clipper.Orientation(path))
+            path.reverse();
+        pieces.push(path);
+    };
+    const sweep = (startS, endS, startWidth, endWidth) => {
+        if (endS - startS <= 1e-6 || Math.max(startWidth, endWidth) <= 1e-6)
+            return;
+        const stations = [sampleCenterlineAtDistance(centerline, startS),
+            ...centerline.samples.filter(sample => sample.s > startS && sample.s < endS),
+            sampleCenterlineAtDistance(centerline, endS)];
+        const path = [];
+        for (const station of stations) {
+            if (station && (!path.length || pointLength(pointSubtract(station.pt, path[path.length - 1].pt)) > 1e-6)) {
+                // Straight cubic samples need only their endpoints. Removing
+                // collinear stations avoids tiny slivers at shared strip edges.
+                while (path.length >= 2) {
+                    const a = path[path.length - 2].pt;
+                    const b = path[path.length - 1].pt;
+                    const ab = pointSubtract(b, a);
+                    const bc = pointSubtract(station.pt, b);
+                    const cross = ab.x * bc.y - ab.y * bc.x;
+                    if (Math.abs(cross) > 1e-7 * Math.max(1, pointLength(ab) + pointLength(bc)) || ab.x * bc.x + ab.y * bc.y < 0)
+                        break;
+                    path.pop();
+                }
+                path.push(station);
+            }
+        }
+        const halfWidth = station => (startWidth + (endWidth - startWidth) * ((station.s - startS) / (endS - startS))) / 2;
+        let previousNormal = null;
+        for (let i = 1; i < path.length; i++) {
+            const a = path[i - 1];
+            const b = path[i];
+            const tangent = normalize(pointSubtract(b.pt, a.pt));
+            const normal = perpendicular(tangent);
+            // Overlap joins by eight grid units so rounding cannot create
+            // hairline gaps or internal borders between consecutive strips.
+            const start = a.s > 0 ? pointSubtract(a.pt, pointMultiply(tangent, 1 / 128)) : a.pt;
+            const end = b.s < totalLength ? pointAdd(b.pt, pointMultiply(tangent, 1 / 128)) : b.pt;
+            const rA = halfWidth(a);
+            const rB = halfWidth(b);
+            addPiece([
+                pointAdd(start, pointMultiply(normal, rA)),
+                pointAdd(end, pointMultiply(normal, rB)),
+                pointSubtract(end, pointMultiply(normal, rB)),
+                pointSubtract(start, pointMultiply(normal, rA)),
+            ]);
+            if (previousNormal && rA > 1e-6) {
+                const cross = previousNormal.x * normal.y - previousNormal.y * normal.x;
+                const dot = previousNormal.x * normal.x + previousNormal.y * normal.y;
+                const turn = Math.atan2(cross, dot);
+                if (Math.abs(turn) > 1e-9) {
+                    const side = turn > 0 ? -1 : 1;
+                    const angle = Math.atan2(previousNormal.y * side, previousNormal.x * side);
+                    const steps = Math.max(1, Math.ceil(Math.abs(turn) / (Math.PI / 12)));
+                    const join = [a.pt];
+                    for (let step = 0; step <= steps; step++) {
+                        const theta = angle + turn * step / steps;
+                        join.push(pointAdd(a.pt, { x: Math.cos(theta) * rA, y: Math.sin(theta) * rA }));
+                    }
+                    addPiece(join);
+                }
+            }
+            previousNormal = normal;
+        }
+    };
+    sweep(0, neckS, rearWidthPx, neckWidthPx);
+    // The head follows the last part of the curve, including bends in it.
+    sweep(neckS, totalLength, headWidthPx, 0);
+    if (!pieces.length)
+        return null;
+    const clipper = new ClipperLib.Clipper();
+    clipper.AddPaths(pieces, ClipperLib.PolyType.ptSubject, true);
+    const tree = new ClipperLib.PolyTree();
+    clipper.Execute(ClipperLib.ClipType.ctUnion, tree, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+    const toRing = path => {
+        const ring = ClipperLib.Clipper.CleanPolygon(path, 2).map(p => ({ x: p.X / 1024, y: p.Y / 1024 }));
+        if (ring.length < 3)
+            return [];
+        ring.push({ ...ring[0] });
+        return ring;
+    };
+    const polygons = ClipperLib.JS.PolyTreeToExPolygons(tree).map(polygon => {
+        const outer = toRing(polygon.outer);
+        return outer.length ? [outer, ...polygon.holes.map(toRing).filter(ring => ring.length)] : null;
+    }).filter(Boolean);
+    return polygons.length ? polygons : null;
+}
+
+// Retain the old single-ring API for callers using the legacy point-array form.
 export function calculateArrowOutlinePoints(centerlineOrPts, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx, legacyHeadWidthPx, legacyHeadLengthPx) {
     let centerline = centerlineOrPts;
     if (Array.isArray(centerlineOrPts)) {
@@ -420,80 +496,5 @@ export function calculateArrowOutlinePoints(centerlineOrPts, rearWidthPx, neckWi
         headWidthPx = legacyHeadWidthPx;
         headLengthPx = legacyHeadLengthPx;
     }
-    if (!centerline || centerline.points.length < 2 || centerline.totalLength <= 1e-6) {
-        return null;
-    }
-    const { points: pts, totalLength } = centerline;
-    rearWidthPx = Math.max(0, rearWidthPx);
-    neckWidthPx = Math.max(0, neckWidthPx);
-    headWidthPx = Math.max(0, headWidthPx);
-    headLengthPx = Math.max(0, Math.min(headLengthPx, totalLength));
-    const tipStation = sampleCenterlineAtDistance(centerline, totalLength);
-    const tip = tipStation?.pt ?? pts[pts.length - 1];
-    const neckTargetCum = Math.max(0, totalLength - headLengthPx);
-    const neckStation = sampleCenterlineAtDistance(centerline, neckTargetCum);
-    const neckPoint = neckStation?.pt ?? pts[pts.length - 1];
-    const neckPerp = neckStation?.normal ?? { x: 0, y: 1 };
-    const leftHeadBase = pointAdd(neckPoint, pointMultiply(neckPerp, headWidthPx / 2));
-    const rightHeadBase = pointSubtract(neckPoint, pointMultiply(neckPerp, headWidthPx / 2));
-    const leftShaft = [];
-    const rightShaft = [];
-    const shaftSamples = centerline.samples.filter(sample => sample.s <= neckTargetCum + 1e-9);
-    if (shaftSamples.length === 0 || Math.abs(shaftSamples[shaftSamples.length - 1].s - neckTargetCum) > 1e-6) {
-        const neckSample = sampleCenterlineAtDistance(centerline, neckTargetCum);
-        if (neckSample)
-            shaftSamples.push(neckSample);
-    }
-    if (shaftSamples.length < 2) {
-        const tipSample = sampleCenterlineAtDistance(centerline, totalLength);
-        if (tipSample)
-            shaftSamples.push(tipSample);
-    }
-    const neckLength = Math.max(neckTargetCum, 1e-6);
-    for (let i = 0; i < shaftSamples.length; i++) {
-        const sample = shaftSamples[i];
-        const p = sample.pt;
-        const perpT = sample.normal;
-        const t = neckLength > 1e-6 ? Math.min(1, Math.max(0, sample.s / neckLength)) : 1;
-        const halfWidth = ((rearWidthPx + (neckWidthPx - rearWidthPx) * t) / 2);
-        leftShaft.push(pointAdd(p, pointMultiply(perpT, halfWidth)));
-        rightShaft.push(pointSubtract(p, pointMultiply(perpT, halfWidth)));
-    }
-    if (leftShaft.length > 0 && rightShaft.length > 0) {
-        const neckHalf = neckWidthPx / 2;
-        leftShaft[leftShaft.length - 1] = pointAdd(neckPoint, pointMultiply(neckPerp, neckHalf));
-        rightShaft[rightShaft.length - 1] = pointSubtract(neckPoint, pointMultiply(neckPerp, neckHalf));
-    }
-    const mergedOutlinePoints = [];
-    const MIN_DIST_SQ = 1e-12;
-    function addPointIfNotDuplicate(point) {
-        if (!point || !isFinite(point.x) || !isFinite(point.y))
-            return;
-        if (mergedOutlinePoints.length === 0) {
-            mergedOutlinePoints.push(point);
-            return;
-        }
-        const lastPt = mergedOutlinePoints[mergedOutlinePoints.length - 1];
-        const dx = point.x - lastPt.x;
-        const dy = point.y - lastPt.y;
-        if ((dx * dx + dy * dy) > MIN_DIST_SQ) {
-            mergedOutlinePoints.push(point);
-        }
-    }
-    for (let i = 0; i < leftShaft.length; i++) {
-        addPointIfNotDuplicate(leftShaft[i]);
-    }
-    addPointIfNotDuplicate(leftHeadBase);
-    addPointIfNotDuplicate(tip);
-    addPointIfNotDuplicate(rightHeadBase);
-    for (let i = rightShaft.length - 1; i >= 0; i--) {
-        addPointIfNotDuplicate(rightShaft[i]);
-    }
-    if (mergedOutlinePoints.length > 0) {
-        addPointIfNotDuplicate(mergedOutlinePoints[0]);
-    }
-    if (mergedOutlinePoints.length < 4) {
-        return null;
-    }
-    return mergedOutlinePoints;
+    return calculateArrowOutlinePolygons(centerline, rearWidthPx, neckWidthPx, headWidthPx, headLengthPx)?.[0]?.[0] ?? null;
 }

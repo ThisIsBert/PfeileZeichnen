@@ -4,8 +4,9 @@ import L from 'leaflet';
 import { EditingState } from './types.js';
 import ControlPanel from './components/ControlPanel.js';
 import { DEFAULT_REAR_WIDTH_PX, DEFAULT_NECK_WIDTH_PX, DEFAULT_HEAD_WIDTH_PX, DEFAULT_HEAD_LENGTH_PX, anchorIcon, handleIcon } from './constants.js';
-import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, sampleCenterlineAtDistance, calculateArrowOutlinePoints } from './app/geometry/index.js';
+import { pointSubtract, pointAdd, pointMultiply, pointLength, normalize, perpendicular, getValidPointsAndLength, sampleCenterlineAtDistance, calculateArrowOutlinePolygons } from './app/geometry/index.js';
 import { setupLeafletMap, teardownLeafletMap } from './app/map/lifecycle.js';
+import { findClosestCurveSegmentIndex } from './app/map/interactions/click.js';
 import { insertAnchorWithAlignedHandles } from './app/map/interactions/handleUpdates.js';
 import { getContainerPoint, getInitialLayerPoints, translateAnchorsByDelta } from './app/map/interactions/drag.js';
 import { generateGeoJsonForArrow } from './app/io/exportGeoJson.js';
@@ -130,8 +131,6 @@ const App = () => {
         if (!map)
             return;
         setCurrentAnchors(prevAnchors => {
-            if (prevAnchors.length >= 2)
-                return prevAnchors;
             const newAnchorId = Date.now().toString() + Math.random().toString();
             const newAnchorLatLng = L.latLng(latlng.lat, latlng.lng);
             return insertAnchorWithAlignedHandles(map, prevAnchors, newAnchorLatLng, index, newAnchorId);
@@ -158,6 +157,8 @@ const App = () => {
     const startArrowDrag = useCallback((e) => {
         const map = mapRef.current;
         if (!map || currentAnchors.length < 1 || editingState === EditingState.Idle)
+            return;
+        if (e.originalEvent?.shiftKey)
             return;
         L.DomEvent.stopPropagation(e.originalEvent);
         L.DomEvent.preventDefault(e.originalEvent);
@@ -206,12 +207,15 @@ const App = () => {
             const latlngs = validCurveData.map(d => map.layerPointToLatLng(L.point(d.pt.x, d.pt.y)));
             if (latlngs.length >= 2) {
                 const previewLine = L.polyline(latlngs, {
-                    color: 'green', dashArray: '5,5', weight: 1, interactive: true,
+                    color: 'green', dashArray: '5,5', weight: 1, interactive: editingState === EditingState.EditingSelected,
                     bubblingMouseEvents: false, isPreviewLine: true
                 });
                 previewLine.on('click', (ev) => {
                     L.DomEvent.stopPropagation(ev);
-                    if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
+                    if (editingState === EditingState.EditingSelected) {
+                        const segmentIndex = findClosestCurveSegmentIndex(map, ev.latlng, anchorsData);
+                        if (segmentIndex >= 0)
+                            addAnchor(ev.latlng, segmentIndex + 1);
                     }
                 });
                 drawingLayer.addLayer(previewLine);
@@ -221,23 +225,22 @@ const App = () => {
             console.error("Error drawing preview line:", error);
         }
         ensureShapeDefaults();
-        const unscaledHeadLengthPx = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
-        currentGeometryRef.current = createGeometrySnapshot(centerline, totalLength, unscaledHeadLengthPx);
         const scale = currentParamsBaseZoom !== null ? map.getZoomScale(map.getZoom(), currentParamsBaseZoom) : 1;
+        currentGeometryRef.current = createGeometrySnapshot(centerline, totalLength, (currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX) * scale);
         const scaledRearWidthPx = Math.max(0, rearWidthPx * scale);
         const scaledNeckWidthPx = Math.max(0, neckWidthPx * scale);
         const geometrySnapshot = currentGeometryRef.current;
         if (!geometrySnapshot)
             return;
-        const headLengthPx = Math.min(geometrySnapshot.stations.headLengthPx * scale, geometrySnapshot.totalLength * scale);
+        const headLengthPx = geometrySnapshot.stations.headLengthPx;
         const headWidthPx = Math.max(0, (currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX) * scale);
-        const outlinePoints = calculateArrowOutlinePoints(geometrySnapshot.centerline, scaledRearWidthPx, scaledNeckWidthPx, headWidthPx, headLengthPx);
+        const outlinePoints = calculateArrowOutlinePolygons(geometrySnapshot.centerline, scaledRearWidthPx, scaledNeckWidthPx, headWidthPx, headLengthPx);
         if (outlinePoints) {
             try {
-                const outlineLatLngs = outlinePoints.map(p => map.layerPointToLatLng(L.point(p.x, p.y)));
-                if (outlineLatLngs.length >= 3) {
+                const outlineLatLngs = outlinePoints.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
+                if (outlineLatLngs.length > 0) {
                     const arrowPreviewShape = L.polygon(outlineLatLngs, {
-                        color: 'blue', fillColor: 'blue', fillOpacity: 0.3, weight: 1, interactive: true, bubblingMouseEvents: false
+                        color: 'blue', fillColor: 'blue', fillOpacity: 0.3, weight: 1, interactive: editingState === EditingState.EditingSelected, bubblingMouseEvents: false
                     });
                     arrowPreviewShape.on('mousedown', (ev) => {
                         L.DomEvent.stopPropagation(ev);
@@ -245,8 +248,10 @@ const App = () => {
                     });
                     arrowPreviewShape.on('click', (ev) => {
                         L.DomEvent.stopPropagation(ev);
-                        if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
-
+                        if (ev.originalEvent?.shiftKey && editingState === EditingState.EditingSelected) {
+                            const segmentIndex = findClosestCurveSegmentIndex(map, ev.latlng, anchorsData);
+                            if (segmentIndex >= 0)
+                                addAnchor(ev.latlng, segmentIndex + 1);
                         }
                     });
                     editingArrowLyr.addLayer(arrowPreviewShape);
@@ -256,7 +261,7 @@ const App = () => {
                 console.error("Error creating arrow preview shape:", error);
             }
         }
-    }, [getAnchorsData, editingState, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentParamsBaseZoom, resetCurrentPixelValues, ensureShapeDefaults, startArrowDrag, createGeometrySnapshot, resetPreviousStationFrames]);
+    }, [getAnchorsData, editingState, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentParamsBaseZoom, resetCurrentPixelValues, ensureShapeDefaults, startArrowDrag, createGeometrySnapshot, resetPreviousStationFrames, addAnchor]);
     const handleGenericDragStart = useCallback((e) => {
         mapRef.current?.dragging.disable();
         if (e.originalEvent)
@@ -363,20 +368,20 @@ const App = () => {
             return null;
         }
         const scale = map.getZoomScale(map.getZoom(), baseZoom);
-        const outlinePoints = calculateArrowOutlinePoints(centerline, rearWidthPx * scale, neckWidthPx * scale, headWidthPx * scale, headLengthPx * scale);
+        const outlinePoints = calculateArrowOutlinePolygons(centerline, rearWidthPx * scale, neckWidthPx * scale, headWidthPx * scale, headLengthPx * scale);
         if (!outlinePoints) {
             console.warn("Finalize: No polygons generated for arrow.");
             return null;
         }
         const newArrowGroup = L.layerGroup();
         try {
-            const outlineLatLngs = outlinePoints.map(p => map.layerPointToLatLng(L.point(p.x, p.y)));
-            if (outlineLatLngs.length >= 3) {
+            const outlineLatLngs = outlinePoints.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
+            if (outlineLatLngs.length > 0) {
                 const finalShape = L.polygon(outlineLatLngs, { color: 'red', fillColor: 'red', fillOpacity: 0.5, weight: 1 });
                 finalShape.on('click', (ev) => {
                     L.DomEvent.stopPropagation(ev);
                     if (handleSelectArrowRef.current) {
-                        handleSelectArrowRef.current(newArrowGroup);
+                        handleSelectArrowRef.current(newArrowGroup, ev.latlng);
                     }
                 });
                 newArrowGroup.addLayer(finalShape);
@@ -401,12 +406,16 @@ const App = () => {
     }, [
         currentAnchors, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper,
         DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentHeadLengthPx, currentHeadWidthPx,
-        currentArrowName, arrowNameCounter, selectedArrowGroup
+        currentArrowName, arrowNameCounter, selectedArrowGroup, currentParamsBaseZoom
     ]);
-    const handleSelectArrow = useCallback((arrowGroupToSelect) => {
+    const handleSelectArrow = useCallback((arrowGroupToSelect, clickedLatLng = null) => {
         const map = mapRef.current;
         if (!map)
             return;
+        if (editingState === EditingState.DrawingNew && clickedLatLng) {
+            addAnchor(clickedLatLng, currentAnchors.length);
+            return;
+        }
         if (editingState !== EditingState.Idle) {
             if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
                 finalizeCurrentArrow();
@@ -429,7 +438,7 @@ const App = () => {
         setCurrentHeadWidthPx(arrowGroupToSelect.arrowParameters.headWidthPx);
         setCurrentParamsBaseZoom(arrowGroupToSelect.arrowParameters.baseZoom);
     }, [
-        editingState, saveStateForCancel, finalizeCurrentArrow
+        editingState, saveStateForCancel, finalizeCurrentArrow, addAnchor, currentAnchors.length
     ]);
     useEffect(() => {
         handleSelectArrowRef.current = handleSelectArrow;
@@ -445,16 +454,16 @@ const App = () => {
             if (!centerline || arrowData.arrowParameters.rearWidthPx === null || arrowData.arrowParameters.neckWidthPx === null || arrowData.arrowParameters.headLengthPx === null || arrowData.arrowParameters.headWidthPx === null)
                 return;
             const scale = arrowData.arrowParameters.baseZoom !== null ? map.getZoomScale(map.getZoom(), arrowData.arrowParameters.baseZoom) : 1;
-            const outlinePoints = calculateArrowOutlinePoints(centerline, (arrowData.arrowParameters.rearWidthPx ?? 0) * scale, (arrowData.arrowParameters.neckWidthPx ?? 0) * scale, (arrowData.arrowParameters.headWidthPx ?? 0) * scale, (arrowData.arrowParameters.headLengthPx ?? 0) * scale);
+            const outlinePoints = calculateArrowOutlinePolygons(centerline, (arrowData.arrowParameters.rearWidthPx ?? 0) * scale, (arrowData.arrowParameters.neckWidthPx ?? 0) * scale, (arrowData.arrowParameters.headWidthPx ?? 0) * scale, (arrowData.arrowParameters.headLengthPx ?? 0) * scale);
             if (outlinePoints) {
                 const restoredGroup = L.layerGroup();
                 try {
-                    const latlngs = outlinePoints.map(p => map.layerPointToLatLng(L.point(p.x, p.y)));
+                    const latlngs = outlinePoints.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
                     const shape = L.polygon(latlngs, { color: 'red', fillColor: 'red', fillOpacity: 0.5, weight: 1 });
                     shape.on('click', (ev) => {
                         L.DomEvent.stopPropagation(ev);
                         if (handleSelectArrowRef.current) {
-                            handleSelectArrowRef.current(restoredGroup);
+                            handleSelectArrowRef.current(restoredGroup, ev.latlng);
                         }
                     });
                     restoredGroup.addLayer(shape);
@@ -577,7 +586,7 @@ const App = () => {
         setCurrentHeadWidthPx(currentPixelParams.headWidthPx);
         setCurrentParamsBaseZoom(currentPixelParams.baseZoom);
         setCurrentArrowName(`${currentNameVal} (Kopie)`);
-    }, [editingState, currentAnchors.length, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, getAnchorsData, handleConfirm]);
+    }, [editingState, currentAnchors.length, rearWidthPx, neckWidthPx, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, getAnchorsData, handleConfirm]);
     const handleDeleteSelectedArrow = useCallback(() => {
         if (editingState === EditingState.EditingSelected && selectedArrowGroup) {
             // The selectedArrowGroup is already removed from arrowLayerRef.current.
@@ -719,7 +728,7 @@ const App = () => {
             return;
         const onMapClickHandler = (e) => {
             if ((editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) && !isArrowDraggingRef.current) {
-                if (editingState === EditingState.DrawingNew && currentAnchors.length < 2) {
+                if (editingState === EditingState.DrawingNew) {
                     addAnchor(e.latlng, currentAnchors.length);
                     return;
                 }
@@ -738,17 +747,22 @@ const App = () => {
     }, [editingState, currentAnchors.length, addAnchor, endEditingSession]);
     useEffect(() => {
         const onWindowKeyDown = (event) => {
-            if (event.key !== 'Escape' || editingState === EditingState.Idle) {
+            if (editingState === EditingState.Idle)
                 return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                handleCancel();
             }
-            event.preventDefault();
-            endEditingSession();
+            else if (event.key === 'Enter' && !event.target.closest?.('input, textarea, select, button, [contenteditable="true"]')) {
+                event.preventDefault();
+                endEditingSession();
+            }
         };
         window.addEventListener('keydown', onWindowKeyDown);
         return () => {
             window.removeEventListener('keydown', onWindowKeyDown);
         };
-    }, [editingState, endEditingSession]);
+    }, [editingState, endEditingSession, handleCancel]);
    useEffect(() => {
        if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
            updateCurveAndArrowPreview();
@@ -934,6 +948,8 @@ const App = () => {
     const canSaveAllGeoJsonExport = getCanSaveAllGeoJson(editingState, arrowLayerRef.current?.getLayers().length ?? 0);
     const controlPanelUiState = {
         editingState,
+        anchorCount: currentAnchors.length,
+        canFinishArrow: isEditing(editingState) && currentAnchors.length >= 2,
         canCopyArrow: canCopyCurrentArrow,
         canDeleteArrow,
         arrowName: currentArrowName,
@@ -949,6 +965,8 @@ const App = () => {
     };
     const controlPanelActions = {
         onDrawArrow: handleDrawArrow,
+        onFinishArrow: endEditingSession,
+        onCancelArrow: handleCancel,
         onCopyArrow: handleCopyArrow,
         onDeleteArrow: handleDeleteSelectedArrow,
         onArrowNameChange: setCurrentArrowName,

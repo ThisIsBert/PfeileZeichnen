@@ -7,6 +7,10 @@
     "lint": "node scripts/lint.mjs",
     "format:check": "node scripts/format-check.mjs",
     "validate:imports": "node scripts/validate-imports.mjs",
-    "check": "npm run lint && npm run format:check && npm run validate:imports"
+    "check": "npm run lint && npm run format:check && npm run validate:imports",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "clipper-lib": "6.4.2"
   }
 }

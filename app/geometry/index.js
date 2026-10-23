@@ -10,4 +10,5 @@ export {
   sampleCenterlineAtDistance,
   getValidPointsAndLength,
   calculateArrowOutlinePoints,
+  calculateArrowOutlinePolygons,
 } from '../../utils/geometry.js';
