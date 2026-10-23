@@ -25,6 +25,7 @@ Runtime CDN imports are pinned and documented in `DEPENDENCIES.md`.
 - Click **Fertig** or press Enter to save. **Abbrechen** or Escape discards the current session.
 - Click, hold and drag an unselected saved arrow to move it as a whole. A short click selects it.
 - Select a saved arrow to edit its anchors and Bezier handles. Shift-click its outline to insert another anchor.
+- To copy a shape, select the target arrow (or draw a new one), click **Form übernehmen**, then click the source arrow. This copies all form parameters and their reference zoom while preserving the target anchors and name. Escape or **Pipette abbrechen** leaves the current editing session open.
 - The outline uses tapered strips with round joins and a curved head. Overlaps are merged; loops retain holes.
 - Preview, saved arrows, and GeoJSON share the same outline. Exports use Polygon (or MultiPolygon when necessary), with closed rings and preserved holes.
 

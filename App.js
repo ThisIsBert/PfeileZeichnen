@@ -23,6 +23,9 @@ const App = () => {
     const arrowLayerRef = useRef(null);
     const editingArrowLayerRef = useRef(null);
     const [editingState, setEditingState] = useState(EditingState.Idle);
+    const [isPickingShape, setIsPickingShape] = useState(false);
+    const shapePickerRef = useRef(isPickingShape);
+    shapePickerRef.current = isPickingShape;
     const editingStateRef = useRef(editingState);
     editingStateRef.current = editingState;
     const [currentAnchors, setCurrentAnchors] = useState([]);
@@ -45,7 +48,7 @@ const App = () => {
     const handleSelectArrowRef = useRef(null);
     const bindSavedArrow = useCallback((shape, arrowGroup) => {
         bindSavedArrowInteractions(mapRef.current, shape, arrowGroup, {
-            canDrag: () => editingStateRef.current === EditingState.Idle,
+            canDrag: () => editingStateRef.current === EditingState.Idle && !shapePickerRef.current,
             onClick: event => handleSelectArrowRef.current?.(arrowGroup, event.latlng),
         });
     }, []);
@@ -130,6 +133,7 @@ const App = () => {
         }
     }, [currentShaftThicknessPx, currentRearTaper, currentFrontTaper, currentHeadWidthPx, currentHeadLengthPx, currentParamsBaseZoom, defaultRearTaper, defaultFrontTaper]);
     const resetCurrentPixelValues = useCallback(() => {
+        setIsPickingShape(false);
         setCurrentShaftThicknessPx(null);
         setCurrentRearTaper(null);
         setCurrentFrontTaper(null);
@@ -169,7 +173,7 @@ const App = () => {
         const map = mapRef.current;
         if (!map || currentAnchors.length < 1 || editingState === EditingState.Idle)
             return;
-        if (e.originalEvent?.shiftKey)
+        if (shapePickerRef.current || e.originalEvent?.shiftKey)
             return;
         L.DomEvent.stopPropagation(e.originalEvent);
         L.DomEvent.preventDefault(e.originalEvent);
@@ -223,7 +227,7 @@ const App = () => {
                 });
                 previewLine.on('click', (ev) => {
                     L.DomEvent.stopPropagation(ev);
-                    if (editingState === EditingState.EditingSelected) {
+                    if (!shapePickerRef.current && editingState === EditingState.EditingSelected) {
                         const segmentIndex = findClosestCurveSegmentIndex(map, ev.latlng, anchorsData);
                         if (segmentIndex >= 0)
                             addAnchor(ev.latlng, segmentIndex + 1);
@@ -259,7 +263,7 @@ const App = () => {
                     });
                     arrowPreviewShape.on('click', (ev) => {
                         L.DomEvent.stopPropagation(ev);
-                        if (ev.originalEvent?.shiftKey && editingState === EditingState.EditingSelected) {
+                        if (!shapePickerRef.current && ev.originalEvent?.shiftKey && editingState === EditingState.EditingSelected) {
                             const segmentIndex = findClosestCurveSegmentIndex(map, ev.latlng, anchorsData);
                             if (segmentIndex >= 0)
                                 addAnchor(ev.latlng, segmentIndex + 1);
@@ -414,10 +418,29 @@ const App = () => {
         DEFAULT_HEAD_LENGTH_PX, DEFAULT_HEAD_WIDTH_PX, currentHeadLengthPx, currentHeadWidthPx,
         currentArrowName, arrowNameCounter, selectedArrowGroup, currentParamsBaseZoom, bindSavedArrow
     ]);
+    const applyArrowParameters = useCallback(parameters => {
+        const params = createArrowParameters(parameters);
+        const rearWidth = params.rearWidthPx ?? DEFAULT_REAR_WIDTH_PX;
+        const neckWidth = params.neckWidthPx ?? DEFAULT_NECK_WIDTH_PX;
+        const shaft = Math.max(2, (rearWidth + neckWidth) / 2);
+        setCurrentShaftThicknessPx(shaft);
+        setCurrentRearTaper(rearWidth / shaft);
+        setCurrentFrontTaper(neckWidth / shaft);
+        setCurrentHeadLengthPx(params.headLengthPx ?? DEFAULT_HEAD_LENGTH_PX);
+        setCurrentHeadWidthPx(params.headWidthPx ?? DEFAULT_HEAD_WIDTH_PX);
+        // Keep the source's reference zoom: the same numbers can otherwise
+        // render at different sizes on arrows created at different zooms.
+        setCurrentParamsBaseZoom(params.baseZoom ?? mapRef.current?.getZoom() ?? null);
+    }, []);
     const handleSelectArrow = useCallback((arrowGroupToSelect, clickedLatLng = null) => {
         const map = mapRef.current;
         if (!map)
             return;
+        if (shapePickerRef.current) {
+            applyArrowParameters(arrowGroupToSelect.arrowParameters);
+            setIsPickingShape(false);
+            return;
+        }
         if (editingState === EditingState.DrawingNew && clickedLatLng) {
             addAnchor(clickedLatLng, currentAnchors.length);
             return;
@@ -434,17 +457,9 @@ const App = () => {
         const loadedAnchors = fromArrowAnchorData(arrowGroupToSelect.savedAnchors, '_load');
         setCurrentAnchors(loadedAnchors);
         setCurrentArrowName(arrowGroupToSelect.arrowName);
-        const rearWidth = arrowGroupToSelect.arrowParameters.rearWidthPx ?? DEFAULT_REAR_WIDTH_PX;
-        const neckWidth = arrowGroupToSelect.arrowParameters.neckWidthPx ?? DEFAULT_NECK_WIDTH_PX;
-        const shaft = Math.max(2, (rearWidth + neckWidth) / 2);
-        setCurrentShaftThicknessPx(shaft);
-        setCurrentRearTaper(rearWidth / shaft);
-        setCurrentFrontTaper(neckWidth / shaft);
-        setCurrentHeadLengthPx(arrowGroupToSelect.arrowParameters.headLengthPx);
-        setCurrentHeadWidthPx(arrowGroupToSelect.arrowParameters.headWidthPx);
-        setCurrentParamsBaseZoom(arrowGroupToSelect.arrowParameters.baseZoom);
+        applyArrowParameters(arrowGroupToSelect.arrowParameters);
     }, [
-        editingState, saveStateForCancel, finalizeCurrentArrow, addAnchor, currentAnchors.length
+        editingState, saveStateForCancel, finalizeCurrentArrow, addAnchor, currentAnchors.length, applyArrowParameters
     ]);
     useEffect(() => {
         handleSelectArrowRef.current = handleSelectArrow;
@@ -756,6 +771,7 @@ const App = () => {
         if (!map)
             return;
         const onMapClickHandler = (e) => {
+            if (shapePickerRef.current) return;
             if ((editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) && !isArrowDraggingRef.current) {
                 if (editingState === EditingState.DrawingNew) {
                     addAnchor(e.latlng, currentAnchors.length);
@@ -766,16 +782,23 @@ const App = () => {
         };
         if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
             map.on('click', onMapClickHandler);
-            map.getContainer().style.cursor = (editingState === EditingState.DrawingNew) ? 'crosshair' : 'default';
+            map.getContainer().style.cursor = (isPickingShape || editingState === EditingState.DrawingNew) ? 'crosshair' : 'default';
         }
         else {
             map.off('click', onMapClickHandler);
             map.getContainer().style.cursor = (editingState === EditingState.EditingSelected) ? 'default' : '';
         }
         return () => { map.off('click', onMapClickHandler); };
-    }, [editingState, currentAnchors.length, addAnchor, endEditingSession]);
+    }, [editingState, currentAnchors.length, addAnchor, endEditingSession, isPickingShape]);
     useEffect(() => {
         const onWindowKeyDown = (event) => {
+            if (isPickingShape) {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setIsPickingShape(false);
+                }
+                return;
+            }
             if (editingState === EditingState.Idle)
                 return;
             if (event.key === 'Escape') {
@@ -791,7 +814,7 @@ const App = () => {
         return () => {
             window.removeEventListener('keydown', onWindowKeyDown);
         };
-    }, [editingState, endEditingSession, handleCancel]);
+    }, [editingState, endEditingSession, handleCancel, isPickingShape]);
    useEffect(() => {
        if (editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected) {
            updateCurveAndArrowPreview();
@@ -969,6 +992,17 @@ const App = () => {
             }
         });
     }, [currentAnchors, editingState , handleAnchorDragStart, handleAnchorDrag, handleAnchorDragEnd, handleGenericDragStart, handleHandleDrag, handleGenericDragEnd]);
+    useEffect(() => {
+        // Sampling a source must not drag a target anchor or Bezier handle.
+        [anchorMarkersRef, handle1MarkersRef, handle2MarkersRef].forEach(ref => {
+            ref.current.forEach(marker => {
+                if (isPickingShape) marker.dragging.disable();
+                else marker.dragging.enable();
+                const element = marker.getElement();
+                if (element) element.style.pointerEvents = isPickingShape ? 'none' : '';
+            });
+        });
+    }, [isPickingShape, currentAnchors]);
     // Control panel contract
     const canEditParameters = getCanEditParameters(editingState) && currentAnchors.length >= 2;
     const canCopyCurrentArrow = isEditing(editingState) && currentAnchors.length >= 2;
@@ -986,6 +1020,8 @@ const App = () => {
         canCopyGeoJson: canCopyGeoJsonCurrent,
         canSaveAllGeoJson: canSaveAllGeoJsonExport,
         canEditParameters,
+        isPickingShape,
+        canPickShape: canEditParameters && (arrowLayerRef.current?.getLayers().length ?? 0) > 0,
         shaftThickness: shaftThicknessPx,
         headLength: currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX,
         headWidth: currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX,
@@ -993,6 +1029,7 @@ const App = () => {
         frontTaper,
     };
     const controlPanelActions = {
+        onToggleShapePicker: () => setIsPickingShape(previous => !previous),
         onLoadTemplate: handleLoadTemplate,
         onClearTemplate: handleClearTemplate,
         onDrawArrow: handleDrawArrow,
