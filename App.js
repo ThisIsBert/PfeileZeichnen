@@ -9,6 +9,8 @@ import { setupLeafletMap, teardownLeafletMap } from './app/map/lifecycle.js';
 import { findClosestCurveSegmentIndex } from './app/map/interactions/click.js';
 import { insertAnchorWithAlignedHandles } from './app/map/interactions/handleUpdates.js';
 import { getContainerPoint, getInitialLayerPoints, translateAnchorsByDelta, bindSavedArrowInteractions } from './app/map/interactions/drag.js';
+import { parseTemplateGeoJson } from './app/io/importGeoJson.js';
+import { createTemplateGeometryLayer } from './app/map/templateLayer.js';
 import { generateGeoJsonForArrow } from './app/io/exportGeoJson.js';
 import { canDeleteArrow as getCanDeleteArrow, canEditParameters as getCanEditParameters, canSaveAllGeoJson as getCanSaveAllGeoJson, isEditing } from './app/state/editingState.js';
 import { fromArrowAnchorData, toArrowAnchorData } from './app/adapters/leafletArrowAdapter.js';
@@ -17,6 +19,7 @@ const App = () => {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
     const drawingLayerRef = useRef(null);
+    const templateLayerRef = useRef(null);
     const arrowLayerRef = useRef(null);
     const editingArrowLayerRef = useRef(null);
     const [editingState, setEditingState] = useState(EditingState.Idle);
@@ -706,18 +709,46 @@ const App = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }, [editingState, currentAnchors.length, generateGeoJsonForArrowForMap]);
+    const handleLoadTemplate = useCallback(async files => {
+        // Prepare the whole batch off the map; an invalid file changes nothing.
+        const layers = await Promise.all(files.map(async file => {
+            try {
+                return createTemplateGeometryLayer(parseTemplateGeoJson(await file.text()));
+            } catch (error) {
+                throw new Error(`${file.name}: ${error.message}`);
+            }
+        }));
+        const map = mapRef.current;
+        const templateLayer = templateLayerRef.current;
+        if (!map || !templateLayer) throw new Error('Die Karte ist noch nicht bereit.');
+        layers.forEach(layer => templateLayer.addLayer(layer));
+        map.addLayer(templateLayer);
+        const bounds = templateLayer.getBounds();
+        if (bounds.isValid() && editingStateRef.current === EditingState.Idle) {
+            map.fitBounds(bounds, {
+                paddingTopLeft: [24, 24],
+                paddingBottomRight: [Math.min(360, map.getSize().x / 2), 24],
+                maxZoom: 16,
+            });
+        }
+    }, []);
+    const handleClearTemplate = useCallback(() => {
+        templateLayerRef.current?.clearLayers();
+    }, []);
     // Effects
     useEffect(() => {
         if (!mapContainerRef.current || mapRef.current)
             return;
-        const { map, drawingLayer, arrowLayer, editingArrowLayer } = setupLeafletMap(mapContainerRef.current);
+        const { map, drawingLayer, arrowLayer, editingArrowLayer, templateLayer } = setupLeafletMap(mapContainerRef.current);
         mapRef.current = map;
+        templateLayerRef.current = templateLayer;
         drawingLayerRef.current = drawingLayer;
         arrowLayerRef.current = arrowLayer;
         editingArrowLayerRef.current = editingArrowLayer;
         return () => {
             teardownLeafletMap(map);
             mapRef.current = null;
+            templateLayerRef.current = null;
         };
     }, []);
     useEffect(() => {
@@ -962,6 +993,8 @@ const App = () => {
         frontTaper,
     };
     const controlPanelActions = {
+        onLoadTemplate: handleLoadTemplate,
+        onClearTemplate: handleClearTemplate,
         onDrawArrow: handleDrawArrow,
         onFinishArrow: endEditingSession,
         onCancelArrow: handleCancel,

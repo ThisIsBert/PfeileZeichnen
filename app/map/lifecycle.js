@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import { setupTemplateLayer } from './templateLayer.js';
 import { INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM } from '../../constants.js';
 
 /**
@@ -13,6 +14,7 @@ export function setupLeafletMap(container) {
 
   return {
     map,
+    templateLayer: setupTemplateLayer(map),
     drawingLayer: L.layerGroup().addTo(map),
     arrowLayer: L.layerGroup().addTo(map),
     editingArrowLayer: L.layerGroup().addTo(map),

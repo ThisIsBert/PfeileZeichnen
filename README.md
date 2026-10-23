@@ -28,6 +28,12 @@ Runtime CDN imports are pinned and documented in `DEPENDENCIES.md`.
 - The outline uses tapered strips with round joins and a curved head. Overlaps are merged; loops retain holes.
 - Preview, saved arrows, and GeoJSON share the same outline. Exports use Polygon (or MultiPolygon when necessary), with closed rings and preserved holes.
 
+## GeoJSON templates
+
+Use **GeoJSON laden** in the **Vorlage** section to load one or more local `.geojson` or `.json` files in WGS84. Geometry objects, Features, FeatureCollections and GeometryCollections are supported, including points, lines, polygons and multipart geometries.
+
+Templates appear below the arrows, cannot be selected or moved, and let drawing clicks pass through. Toggle **Vorlage** in the layer control at the top left to hide or show them; **Leeren** removes the loaded templates. Further imports add to the same layer. Invalid files leave the existing template unchanged. Templates are excluded from arrow exports. Loading a template fits the view to it unless an arrow is currently being edited.
+
 ## Tests
 
 Run `npm ci` once, then `npm test` for geometry and GeoJSON regression tests.
