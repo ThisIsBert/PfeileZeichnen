@@ -39,6 +39,12 @@ Pixel sizes refer to the arrow's **reference zoom**, shown alongside the current
 
 If arrow geometry cannot be saved, the draft, name, form values and cancel baseline remain available. Fix the geometry, undo the last edit, or cancel explicitly. Copying or selecting another arrow cannot bypass a failed save.
 
+## Project files
+
+Use **Projekt speichern** to download `projekt.pfeile.json`, and **Projekt laden** to continue editing it later. A project includes saved arrows with all anchors, Bezier handles, names, original form values and reference zooms; the open drawing/editing session and its cancel baseline; template geometries, file names and visibility; and the map center and zoom. Even unfinished or geometrically invalid drafts can be saved without finishing them.
+
+Loading replaces the current project and starts a fresh undo/redo history. The entire file and saved arrow geometry are checked before changing the current state. Unsupported versions, malformed files, invalid geometry and files above 20 MB leave the current project intact. The file format is versioned independently of GeoJSON; use **GeoJSON speichern** to export finished outlines for other software. No autosave or browser storage is used.
+
 ## GeoJSON templates
 
 Use **GeoJSON laden** in the **Vorlage** section to load one or more local `.geojson` or `.json` files in WGS84. Geometry objects, Features, FeatureCollections and GeometryCollections are supported, including points, lines, polygons and multipart geometries.

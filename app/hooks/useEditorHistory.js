@@ -50,9 +50,17 @@ export function useEditorHistory() {
     if (snapshot !== null && restoreRef.current(snapshot) === false) historyRef.current.undo();
     update(version => version + 1);
   }, [end, flush]);
+  const reset = useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+    activeRef.current = null;
+    pendingRef.current = null;
+    historyRef.current = createHistory();
+    update(version => version + 1);
+  }, []);
   useEffect(() => () => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
   }, []);
-  return { captureRef, restoreRef, begin, end, run, undo, redo,
+  return { captureRef, restoreRef, begin, end, run, undo, redo, reset,
     canUndo: historyRef.current.canUndo, canRedo: historyRef.current.canRedo };
 }

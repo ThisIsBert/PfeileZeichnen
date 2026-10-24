@@ -10,6 +10,8 @@ import { findClosestCurveSegmentIndex } from './app/map/interactions/click.js';
 import { insertAnchorWithAlignedHandles } from './app/map/interactions/handleUpdates.js';
 import { getContainerPoint, getInitialLayerPoints, translateAnchorsByDelta, bindSavedArrowInteractions } from './app/map/interactions/drag.js';
 import { parseTemplateGeoJson } from './app/io/importGeoJson.js';
+import { MAX_PROJECT_BYTES, parseProject, serializeProject } from './app/io/projectFile.js';
+import { createProjectProjection } from './app/map/projectView.js';
 import { createTemplateGeometryLayer } from './app/map/templateLayer.js';
 import { generateGeoJsonForArrow } from './app/io/exportGeoJson.js';
 import { canDeleteArrow as getCanDeleteArrow, canEditParameters as getCanEditParameters, canSaveAllGeoJson as getCanSaveAllGeoJson, isEditing } from './app/state/editingState.js';
@@ -23,6 +25,8 @@ const App = () => {
     const mapRef = useRef(null);
     const drawingLayerRef = useRef(null);
     const templateLayerRef = useRef(null);
+    const templateDataRef = useRef([]);
+    const [templateFileNames, setTemplateFileNames] = useState([]);
     const arrowLayerRef = useRef(null);
     const editingArrowLayerRef = useRef(null);
     const history = useEditorHistory();
@@ -667,7 +671,8 @@ const App = () => {
         // Prepare the whole batch off the map; an invalid file changes nothing.
         const layers = await Promise.all(files.map(async file => {
             try {
-                return createTemplateGeometryLayer(parseTemplateGeoJson(await file.text()));
+                const data = parseTemplateGeoJson(await file.text());
+                return { data, layer: createTemplateGeometryLayer(data), name: file.name };
             } catch (error) {
                 throw new Error(`${file.name}: ${error.message}`);
             }
@@ -675,7 +680,9 @@ const App = () => {
         const map = mapRef.current;
         const templateLayer = templateLayerRef.current;
         if (!map || !templateLayer) throw new Error('Die Karte ist noch nicht bereit.');
-        layers.forEach(layer => templateLayer.addLayer(layer));
+        layers.forEach(item => templateLayer.addLayer(item.layer));
+        templateDataRef.current.push(...layers.map(item => item.data));
+        setTemplateFileNames(previous => [...previous, ...layers.map(item => item.name)]);
         map.addLayer(templateLayer);
         const bounds = templateLayer.getBounds();
         if (bounds.isValid() && editingStateRef.current === EditingState.Idle) {
@@ -688,7 +695,57 @@ const App = () => {
     }, []);
     const handleClearTemplate = useCallback(() => {
         templateLayerRef.current?.clearLayers();
+        templateDataRef.current = [];
+        setTemplateFileNames([]);
     }, []);
+    const handleSaveProject = useCallback(() => {
+        const map = mapRef.current;
+        if (!map || isSceneDraggingRef.current) throw new Error('Die Karte ist noch nicht bereit.');
+        const json = serializeProject(history.captureRef.current(), {
+            center: createLatLngLiteral(map.getCenter()), zoom: map.getZoom(),
+        }, {
+            data: { type: 'FeatureCollection', features: templateDataRef.current.flatMap(data => data.features) },
+            visible: map.hasLayer(templateLayerRef.current), fileNames: templateFileNames,
+        });
+        const blob = new Blob([json], { type: 'application/json' });
+        if (blob.size > MAX_PROJECT_BYTES) throw new Error('Die Projektdatei überschreitet die Grenze von 20 MB.');
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'projekt.pfeile.json';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, [history.captureRef, templateFileNames]);
+    const handleLoadProject = useCallback(async file => {
+        if (file.size > MAX_PROJECT_BYTES) throw new Error('Die Projektdatei darf höchstens 20 MB groß sein.');
+        const project = parseProject(await file.text());
+        const map = mapRef.current;
+        const templateLayer = templateLayerRef.current;
+        if (!map || !templateLayer || isSceneDraggingRef.current) throw new Error('Die Karte ist noch nicht bereit.');
+        // Rebuild at each arrow's reference zoom, even if the saved view is zoomed
+        // far out. Pixel rounding at low zoom must not collapse small arrows.
+        const buildProjectArrow = data => createSavedArrowGroup(createProjectProjection(map, {
+            center: project.view.center, zoom: data.arrowParameters.baseZoom,
+        }), data, bindSavedArrow);
+        const template = project.template.data.features.length ? createTemplateGeometryLayer(project.template.data) : null;
+        if (project.editor.backup.some(data => !buildProjectArrow(data))) {
+            throw new Error('Die Projektdatei enthält einen ungültigen Pfeil im Abbruchstand. Der aktuelle Stand bleibt erhalten.');
+        }
+        if (!history.restoreRef.current(project.editor, buildProjectArrow)) {
+            throw new Error('Die Pfeilgeometrie konnte nicht geladen werden. Der aktuelle Stand bleibt erhalten.');
+        }
+        templateLayer.clearLayers();
+        if (template) templateLayer.addLayer(template);
+        if (project.template.visible) map.addLayer(templateLayer);
+        else map.removeLayer(templateLayer);
+        templateDataRef.current = template ? [project.template.data] : [];
+        setTemplateFileNames(project.template.fileNames);
+        map.stop();
+        map.setView(project.view.center, project.view.zoom, { animate: false });
+        history.reset();
+    }, [history.restoreRef, history.reset, bindSavedArrow]);
     // Effects
     useEffect(() => {
         if (!mapContainerRef.current || mapRef.current)
@@ -969,9 +1026,9 @@ const App = () => {
         backup: savedArrowsBackup.map(createPersistedArrow),
         backupCounter: backupArrowNameCounter,
     });
-    history.restoreRef.current = snapshot => {
-        const groups = snapshot.arrows.map(buildSavedArrow);
-        const selected = snapshot.selectedArrow ? buildSavedArrow(snapshot.selectedArrow) : null;
+    history.restoreRef.current = (snapshot, build = buildSavedArrow) => {
+        const groups = snapshot.arrows.map(data => build(data));
+        const selected = snapshot.selectedArrow ? build(snapshot.selectedArrow) : null;
         if (groups.some(group => !group) || (snapshot.selectedArrow && !selected)) {
             setEditorError('Der Verlauf konnte nicht wiederhergestellt werden. Der aktuelle Stand bleibt erhalten.');
             return false;
@@ -1009,6 +1066,7 @@ const App = () => {
     const controlPanelUiState = {
         editingState,
         editorError,
+        templateFileNames,
         canUndo: history.canUndo,
         canRedo: history.canRedo,
         parameterBaseZoom: currentParamsBaseZoom,
@@ -1031,6 +1089,8 @@ const App = () => {
         frontTaper,
     };
     const controlPanelActions = {
+        onSaveProject: handleSaveProject,
+        onLoadProject: handleLoadProject,
         onToggleShapePicker: () => setIsPickingShape(previous => !previous),
         onLoadTemplate: handleLoadTemplate,
         onClearTemplate: handleClearTemplate,
