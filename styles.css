@@ -104,11 +104,7 @@ summary:focus-visible { border-radius: 3px; }
 .advanced-controls > summary { padding: 6px 0; }
 .advanced-controls[open] { padding-bottom: 12px; }
 .is-pressed { color: var(--accent-dark); border-color: var(--accent); background: var(--accent-soft); }
-.point-legend { display: flex; gap: 20px; color: var(--muted); }
-.point-legend > span { display: inline-flex; align-items: center; gap: 8px; }
-.legend-anchor, .legend-handle { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--accent); background: #fff; }
-.legend-anchor { border-radius: 50%; background: var(--accent); }
-.legend-handle { border-radius: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .object-actions { display: flex; gap: 8px; margin-top: 15px; }
 .empty-state { color: var(--muted); padding: 16px; background: #f6f8f9; border-radius: 8px; line-height: 1.6; }
 .arrow-list { list-style: none; margin: 0; padding: 0; }
@@ -117,12 +113,20 @@ summary:focus-visible { border-radius: 3px; }
 .arrow-list-item > .icon:first-child { color: var(--accent); }
 .arrow-list-item > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .arrow-list-item > .icon:last-child { width: 15px; height: 15px; color: var(--muted); }
-.template-controls > summary { display: flex; align-items: center; gap: 9px; font-weight: 600; color: var(--ink); min-height: 24px; }
-.template-controls > summary::after { content: '+'; font-size: 18px; font-weight: 400; margin-left: auto; color: var(--muted); }
-.template-controls[open] > summary::after { content: '−'; }
+.document-tools { overflow-y: auto; min-height: 0; scrollbar-width: thin; }
+.document-tool { border-top: 1px solid var(--line); padding: 0 4px; }
+.document-tool > summary { display: flex; align-items: center; gap: 9px; font-weight: 600; color: var(--ink); min-height: 45px; list-style: none; }
+.document-tool > summary::-webkit-details-marker { display: none; }
+.document-tool > summary::after { content: '+'; font-size: 18px; font-weight: 400; margin-left: auto; color: var(--muted); }
+.document-tool[open] > summary::after { content: '−'; }
+.document-tool[open] { padding-bottom: 12px; }
+.document-tool > summary:hover { color: var(--accent-dark); }
+.document-tool .project-actions { margin-top: 14px; }
+.export-control > summary { color: var(--accent-dark); }
 .template-actions { display: flex; gap: 6px; margin-top: 14px; }
 .template-filenames { overflow-wrap: anywhere; }
-.panel-footer { flex: 0 0 auto; padding: 14px 18px 8px; border-top: 1px solid var(--line); background: #fafcfc; }
+.panel-footer { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0; max-height: 50%; padding: 12px 18px 0; border-top: 1px solid var(--line); background: #fafcfc; }
+.editing-actions, .feedback { flex-shrink: 0; }
 .editing-actions { display: grid; grid-template-columns: 1.65fr 1fr; gap: 8px; margin-bottom: 9px; }
 .editing-actions .button { min-height: 42px; }
 .feedback { display: flex; align-items: flex-start; gap: 7px; min-height: 22px; margin-bottom: 10px; color: var(--accent-dark); font-size: 13px; line-height: 1.5; }
@@ -134,9 +138,7 @@ summary:focus-visible { border-radius: 3px; }
 .project-actions { display: grid; grid-template-columns: 1.1fr 1fr; gap: 8px; }
 .project-actions .button { font-size: 13px; padding-left: 9px; padding-right: 9px; white-space: nowrap; }
 .project-actions .icon { width: 16px; height: 16px; }
-.export-control { position: relative; margin-top: 4px; }
-.export-trigger { width: 100%; min-height: 34px; font-size: 13px; }
-.export-options { position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; border: 1px solid #cad6da; background: #fff; padding: 5px; border-radius: 10px; box-shadow: 0 6px 24px #23343b24; }
+.export-options { padding: 0; }
 .export-option { display: block; width: 100%; text-align: left; border: 0; background: #fff; border-radius: 6px; color: var(--ink); padding: 11px 10px; }
 .export-option:hover:enabled { background: var(--accent-soft); }
 .export-option > strong { display: block; font-size: 14px; font-weight: 600; line-height: 1.5; }

@@ -878,7 +878,7 @@ const App = () => {
                 event.preventDefault();
                 history.run(handleCancel);
             }
-            else if (event.key === 'Enter' && !event.target.closest?.('input, textarea, select, button, [contenteditable="true"]')) {
+            else if (event.key === 'Enter' && !event.target.closest?.('input, textarea, select, button, summary, [contenteditable="true"]')) {
                 event.preventDefault();
                 history.run(endEditingSession);
             }
@@ -1222,7 +1222,7 @@ const App = () => {
             _jsx('div', { ref: mapContainerRef, id: 'map', className: mutedMap ? 'map-muted' : '' }),
             _jsxs('label', { className: 'map-display-control', children: [
                 _jsx('input', { id: 'mutedMapToggle', type: 'checkbox', checked: mutedMap, onChange: event => setMutedMap(event.target.checked) }),
-                'Karte dezent',
+                'dezente Karte',
             ] }),
         ] }),
         _jsx(ControlPanel, { uiState: controlPanelUiState, actions: controlPanelActions }),

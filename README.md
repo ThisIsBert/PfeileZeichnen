@@ -22,9 +22,9 @@ The desktop interface is styled locally in `styles.css`; no runtime CSS generato
 
 ## Desktop workspace
 
-The map and the inspector have separate areas. Only the inspector's properties scroll; finish/cancel, project file actions and GeoJSON export stay visible at the bottom. The idle inspector offers drawing, an accessible list of finished arrows and collapsible template tools. Selecting an arrow reveals its name and form. Rear/front taper and reference-zoom details are under **Verjüngung & Maßstab**.
+The map and the inspector have separate areas. Only the inspector's properties scroll; finish/cancel stay visible below the properties. Document tools are separate from arrow editing, in priority order: **GeoJSON exportieren**, **Projekt speichern & laden**, **Vorlagen**. All three use the same disclosure pattern; opening one closes the other. Their own scroll area keeps expanded tools from displacing the editing actions on short desktop windows. The idle inspector offers drawing and an accessible list of finished arrows. Selecting an arrow reveals its name and form. Rear/front taper and reference-zoom details are under **Verjüngung & Maßstab**.
 
-**Karte dezent** reduces the basemap's saturation without changing arrows or exports. Stützpunkte are circles and Kurvengriffe are squares, each with a 28 px hit area. Focus a point with Tab and move it with the arrow keys (1 screen pixel, or 10 with Shift). Finished arrows can also be selected from the list or with Enter/Space on their map outline.
+**dezente Karte** reduces the basemap's saturation without changing arrows or exports. Stützpunkte and Kurvengriffe each have a 28 px hit area. Focus a point with Tab and move it with the arrow keys (1 screen pixel, or 10 with Shift). Finished arrows can also be selected from the list or with Enter/Space on their map outline.
 
 ## Drawing and editing
 
@@ -32,7 +32,7 @@ The map and the inspector have separate areas. Only the inspector's properties s
 - Click **Pfeil fertigstellen** or press Enter to accept the arrow into the project. Save a project file separately to keep it for later. **Abbrechen** or Escape discards the current session.
 - Click, hold and drag an unselected saved arrow to move it as a whole. A short click selects it.
 - Select a saved arrow to edit its anchors and Bezier handles. Shift-click its outline to insert another anchor.
-- To copy a shape, select the target arrow (or draw a new one), click **Form übernehmen**, then click the source arrow. This copies all form parameters and their reference zoom while preserving the target anchors and name. Escape or **Formübernahme abbrechen** leaves the current editing session open.
+- To copy a shape, select the target arrow (or draw a new one), click **Form von anderem Pfeil kopieren**, then click the source arrow. This copies all form parameters and their reference zoom while preserving the target anchors and name. Escape or **Kopieren der Form abbrechen** leaves the current editing session open.
 - The outline uses tapered strips with round joins and a curved head. Overlaps are merged; loops retain holes.
 - Preview, saved arrows, and GeoJSON share the same outline. Exports use Polygon (or MultiPolygon when necessary), with closed rings and preserved holes.
 

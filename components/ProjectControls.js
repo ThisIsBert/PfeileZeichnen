@@ -39,9 +39,13 @@ const ProjectControls = ({ onSave, onLoad, hasUnsavedChanges, onNotify }) => {
     };
     return _jsxs(React.Fragment, { children: [
         _jsx('input', { ref: inputRef, id: 'projectFileInput', type: 'file', hidden: true, accept: '.pfeile.json,.json,application/json', onChange: load }),
+        _jsxs('details', { className: 'document-tool project-controls', name: 'documentTools', children: [
+            _jsxs('summary', { id: 'projectMenuBtn', children: [_jsx(Icon, { name: 'save' }), 'Projekt speichern & laden'] }),
+            _jsx('p', { className: 'hint', children: 'Pfeile, Entwurf und Vorlagen als Projektdatei zum Weiterbearbeiten sichern.' }),
         _jsxs('div', { className: 'project-actions', 'aria-label': 'Projektdatei', children: [
             _jsxs('button', { id: 'saveProjectBtn', type: 'button', disabled: busy, onClick: () => run(onSave, 'Projektdatei zum Herunterladen erstellt.'), className: 'button button-secondary', children: [_jsx(Icon, { name: 'save' }), 'Projekt speichern'] }),
             _jsxs('button', { id: 'loadProjectBtn', type: 'button', disabled: busy, onClick: () => inputRef.current.click(), className: 'button button-secondary', children: [_jsx(Icon, { name: 'folder' }), busy ? 'Wird geladen …' : 'Projekt laden'] }),
+        ] }),
         ] }),
         _jsxs('dialog', { ref: dialogRef, id: 'replaceProjectDialog', className: 'project-dialog', 'aria-labelledby': 'replaceProjectHeading', 'aria-describedby': 'replaceProjectDescription', onCancel: event => {
             if (busy) event.preventDefault(); else setPendingFile(null);

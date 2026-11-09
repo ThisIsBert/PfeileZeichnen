@@ -19,7 +19,7 @@ const TemplateControls = ({ onLoad, onClear, fileNames, onNotify }) => {
             setError(failure.message || 'Die Vorlage konnte nicht geladen werden.');
         } finally { setIsLoading(false); }
     };
-    return _jsxs('details', { className: 'inspector-section template-controls', children: [
+    return _jsxs('details', { className: 'document-tool template-controls', name: 'documentTools', children: [
         _jsxs('summary', { children: [_jsx(Icon, { name: 'layers' }), 'Vorlagen', fileNames.length > 0 && _jsx('span', { className: 'count-badge', children: fileNames.length })] }),
         _jsx('p', { className: 'hint', children: 'GeoJSON als Vorlage laden. Über „Vorlage“ links ein- und ausblenden. Vorlagen werden nicht mit den Pfeilen exportiert.' }),
         _jsx('input', { ref: inputRef, id: 'templateFileInput', type: 'file', hidden: true, multiple: true, accept: '.geojson,.json,application/geo+json,application/json', onChange: loadFiles }),

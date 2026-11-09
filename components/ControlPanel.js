@@ -26,15 +26,6 @@ const ControlPanel = ({ uiState, actions }) => {
     const isActive = editingState !== EditingState.Idle;
     const isDrawing = editingState === EditingState.DrawingNew;
     const [showForm, setShowForm] = React.useState(true);
-    const [showExport, setShowExport] = React.useState(false);
-    const exportRef = React.useRef(null);
-    React.useEffect(() => {
-        const close = event => {
-            if (!exportRef.current?.contains(event.target)) setShowExport(false);
-        };
-        document.addEventListener('pointerdown', close);
-        return () => document.removeEventListener('pointerdown', close);
-    }, []);
     const slider = (id, label, min, max, step, value, paramKey) => _jsx(ShapeParameterControl, {
         id, label, min, max, step, value, paramKey, disabled: !canEditParameters,
         onChange: onShapeParamChange, onBegin: onBeginChange, onEnd: onEndChange,
@@ -91,16 +82,12 @@ const ControlPanel = ({ uiState, actions }) => {
                                 ? `Pixelwerte beziehen sich auf Zoom ${parameterBaseZoom}. Aktuell: Zoom ${mapZoom ?? parameterBaseZoom}, Faktor ${Math.pow(2, (mapZoom ?? parameterBaseZoom) - parameterBaseZoom).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
                                 : 'Pixelwerte beziehen sich auf die Zoomstufe beim Anlegen. Schaft hinten und vorne sind Faktoren.' }),
                         ] }),
-                        _jsxs('button', { id: 'pickShapeBtn', type: 'button', className: `button button-secondary full-width ${isPickingShape ? 'is-pressed' : ''}`, 'aria-pressed': isPickingShape, disabled: !canPickShape, title: canPickShape ? 'Form von einem anderen Pfeil übernehmen' : 'Du brauchst zwei Stützpunkte und einen weiteren fertigen Pfeil als Quelle', onClick: onToggleShapePicker, children: [_jsx(Icon, { name: 'pipette' }), isPickingShape ? 'Formübernahme abbrechen' : 'Form übernehmen'] }),
-                        isPickingShape && _jsx('p', { id: 'shapePickerHint', role: 'status', className: 'hint accent-text', children: 'Klicke auf den Quellpfeil. Esc beendet die Formübernahme.' }),
+                        _jsxs('button', { id: 'pickShapeBtn', type: 'button', className: `button button-secondary full-width ${isPickingShape ? 'is-pressed' : ''}`, 'aria-pressed': isPickingShape, disabled: !canPickShape, title: canPickShape ? 'Form von anderem Pfeil kopieren' : 'Du brauchst zwei Stützpunkte und einen weiteren fertigen Pfeil als Quelle', onClick: onToggleShapePicker, children: [_jsx(Icon, { name: 'pipette' }), isPickingShape ? 'Kopieren der Form abbrechen' : 'Form von anderem Pfeil kopieren'] }),
+                        isPickingShape && _jsx('p', { id: 'shapePickerHint', role: 'status', className: 'hint accent-text', children: 'Klicke auf den Pfeil, dessen Form du kopieren möchtest. Esc bricht ab.' }),
                     ] }),
                 ] }),
                 _jsxs('section', { className: 'inspector-section point-help', 'aria-label': 'Punkte bedienen', children: [
-                    _jsxs('div', { className: 'point-legend', children: [
-                        _jsxs('span', { children: [_jsx('i', { className: 'legend-anchor', 'aria-hidden': 'true' }), 'Stützpunkt'] }),
-                        _jsxs('span', { children: [_jsx('i', { className: 'legend-handle', 'aria-hidden': 'true' }), 'Kurvengriff'] }),
-                    ] }),
-                    _jsx('p', { id: 'pointKeyboardHint', className: 'hint', children: 'Mit Tab einen Punkt fokussieren. Pfeiltasten: 1 px, mit Umschalt: 10 px verschieben.' }),
+                    _jsx('p', { id: 'pointKeyboardHint', className: 'sr-only', children: 'Mit Tab einen Punkt fokussieren. Pfeiltasten: 1 px, mit Umschalt: 10 px verschieben.' }),
                     _jsxs('div', { className: 'object-actions', children: [
                         _jsxs('button', { id: 'copyArrowBtn', type: 'button', className: 'button button-secondary', disabled: !canCopyArrow, title: canCopyArrow ? 'Pfeil duplizieren' : 'Setze zuerst mindestens zwei Stützpunkte', onClick: onCopyArrow, children: [_jsx(Icon, { name: 'copy' }), 'Duplizieren'] }),
                         canDeleteArrow && _jsxs('button', { id: 'deleteArrowBtn', type: 'button', className: 'button button-danger', onClick: onDeleteArrow, title: 'Pfeil löschen; lässt sich rückgängig machen', children: [_jsx(Icon, { name: 'trash' }), 'Löschen'] }),
@@ -121,7 +108,6 @@ const ControlPanel = ({ uiState, actions }) => {
                     }) }, arrow.id)) }) : _jsx('p', { className: 'empty-state', children: 'Noch keine Pfeile. Starte mit deinem ersten Pfeil oder lade eine Projektdatei.' }),
                 ] }),
             ] }),
-            _jsx(TemplateControls, { fileNames: templateFileNames, onLoad: onLoadTemplate, onClear: onClearTemplate, onNotify }),
         ] }),
         _jsxs('footer', { className: 'panel-footer', children: [
             isActive && _jsxs('div', { className: 'editing-actions', children: [
@@ -133,16 +119,21 @@ const ControlPanel = ({ uiState, actions }) => {
                 _jsx('span', { children: notice.message }, notice.id),
                 _jsx('button', { type: 'button', className: 'dismiss-button', 'aria-label': 'Meldung schließen', onClick: onDismissNotice, children: _jsx(Icon, { name: 'close' }) }),
             ] : _jsx('span', { className: 'footer-hint', children: isActive ? 'Fertigstellen übernimmt den Pfeil ins Projekt.' : 'Als Projektdatei später weiterbearbeiten.' }) }),
-            _jsx(ProjectControls, { onSave: onSaveProject, onLoad: onLoadProject, hasUnsavedChanges, onNotify }),
-            _jsxs('div', { className: 'export-control', ref: exportRef, onBlur: event => { if (!event.currentTarget.contains(event.relatedTarget)) setShowExport(false); }, onKeyDown: event => {
-                if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setShowExport(false); exportRef.current.querySelector('#exportMenuBtn').focus(); }
+            _jsxs('div', { className: 'document-tools', 'aria-label': 'Export, Projektdatei und Vorlagen', onKeyDown: event => {
+                if (event.key !== 'Escape' || event.target.closest('dialog[open]')) return;
+                const section = event.target.closest('details[open]');
+                if (section) { event.preventDefault(); event.stopPropagation(); section.open = false; section.querySelector('summary').focus(); }
             }, children: [
-                _jsxs('button', { id: 'exportMenuBtn', type: 'button', className: 'button button-quiet export-trigger', 'aria-expanded': showExport, 'aria-controls': 'exportOptions', onClick: () => setShowExport(value => !value), children: [_jsx(Icon, { name: 'download' }), 'GeoJSON exportieren', _jsx(Icon, { name: 'chevron', className: showExport ? 'is-open' : '' })] }),
-                _jsxs('div', { id: 'exportOptions', className: 'export-options', hidden: !showExport, children: [
-                    _jsxs('button', { id: 'saveGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canCopyGeoJson, onClick: () => { onSaveGeoJson(); setShowExport(false); }, children: [_jsx('strong', { children: 'Aktuellen Pfeil als Datei exportieren' }), _jsx('span', { children: canCopyGeoJson ? 'Aktuelle Form inklusive Bearbeitung · .geojson' : 'Pfeil auswählen oder mindestens zwei Punkte zeichnen.' })] }),
-                    _jsxs('button', { id: 'saveAllGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canSaveAllGeoJson, onClick: () => { onSaveAllGeoJson(); setShowExport(false); }, children: [_jsx('strong', { children: 'Alle Pfeile als Datei exportieren' }), _jsx('span', { children: isActive ? 'Zuerst die aktuelle Bearbeitung fertigstellen.' : savedArrows.length ? `${savedArrows.length} ${savedArrows.length === 1 ? 'Pfeil' : 'Pfeile'} · .geojson` : 'Zeichne zuerst einen Pfeil.' })] }),
-                    _jsxs('button', { id: 'copyGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canCopyGeoJson, onClick: () => { onCopyGeoJson(); setShowExport(false); }, children: [_jsx('strong', { children: 'Aktuellen Pfeil kopieren' }), _jsx('span', { children: canCopyGeoJson ? 'GeoJSON in die Zwischenablage kopieren.' : 'Pfeil auswählen oder mindestens zwei Punkte zeichnen.' })] }),
+            _jsxs('details', { className: 'document-tool export-control', name: 'documentTools', children: [
+                _jsxs('summary', { id: 'exportMenuBtn', children: [_jsx(Icon, { name: 'download' }), 'GeoJSON exportieren'] }),
+                _jsxs('div', { id: 'exportOptions', className: 'export-options', children: [
+                    _jsxs('button', { id: 'saveGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canCopyGeoJson, onClick: onSaveGeoJson, children: [_jsx('strong', { children: 'Aktuellen Pfeil als Datei exportieren' }), _jsx('span', { children: canCopyGeoJson ? 'Aktuelle Form inklusive Bearbeitung · .geojson' : 'Pfeil auswählen oder mindestens zwei Punkte zeichnen.' })] }),
+                    _jsxs('button', { id: 'saveAllGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canSaveAllGeoJson, onClick: onSaveAllGeoJson, children: [_jsx('strong', { children: 'Alle Pfeile als Datei exportieren' }), _jsx('span', { children: isActive ? 'Zuerst die aktuelle Bearbeitung fertigstellen.' : savedArrows.length ? `${savedArrows.length} ${savedArrows.length === 1 ? 'Pfeil' : 'Pfeile'} · .geojson` : 'Zeichne zuerst einen Pfeil.' })] }),
+                    _jsxs('button', { id: 'copyGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canCopyGeoJson, onClick: onCopyGeoJson, children: [_jsx('strong', { children: 'Aktuellen Pfeil kopieren' }), _jsx('span', { children: canCopyGeoJson ? 'GeoJSON in die Zwischenablage kopieren.' : 'Pfeil auswählen oder mindestens zwei Punkte zeichnen.' })] }),
                 ] }),
+            ] }),
+            _jsx(ProjectControls, { onSave: onSaveProject, onLoad: onLoadProject, hasUnsavedChanges, onNotify }),
+            _jsx(TemplateControls, { fileNames: templateFileNames, onLoad: onLoadTemplate, onClear: onClearTemplate, onNotify }),
             ] }),
         ] }),
     ] });
