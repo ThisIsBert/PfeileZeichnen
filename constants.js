@@ -7,21 +7,21 @@ export const DEFAULT_HEAD_WIDTH_PX = DEFAULT_FORM.headWidthPx;
 export const DEFAULT_HEAD_LENGTH_PX = DEFAULT_FORM.headLengthPx;
 
 export const HANDLE_OFFSET_ON_LINE_PIXELS = 30;
-export const ANCHOR_ICON_HTML = '<div style="width:12px;height:12px;border-radius:6px;background:red;border:2px solid white;box-shadow: 0 0 3px rgba(0,0,0,0.5);"></div>';
-export const HANDLE_ICON_HTML = '<div style="width:10px;height:10px;border-radius:5px;background:blue;border:1px solid white;box-shadow: 0 0 3px rgba(0,0,0,0.5);"></div>';
+export const ANCHOR_ICON_HTML = '<span aria-hidden="true"></span>';
+export const HANDLE_ICON_HTML = '<span aria-hidden="true"></span>';
 
 export const anchorIcon = L.divIcon({
     html: ANCHOR_ICON_HTML,
-    className: 'leaflet-div-icon anchor-icon',
-    iconSize: [12, 12],
-    iconAnchor: [6, 6],
+    className: 'leaflet-div-icon editor-marker anchor-icon',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
 });
 
 export const handleIcon = L.divIcon({
     html: HANDLE_ICON_HTML,
-    className: 'leaflet-div-icon handle-icon',
-    iconSize: [10, 10],
-    iconAnchor: [5, 5],
+    className: 'leaflet-div-icon editor-marker handle-icon',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
 });
 
 export const INITIAL_MAP_CENTER = [51.1657, 10.4515];

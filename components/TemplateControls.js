@@ -1,7 +1,8 @@
 import { jsx as _jsx, jsxs as _jsxs } from 'react/jsx-runtime';
 import React from 'react';
+import Icon from './Icon.js';
 
-const TemplateControls = ({ onLoad, onClear, fileNames }) => {
+const TemplateControls = ({ onLoad, onClear, fileNames, onNotify }) => {
     const inputRef = React.useRef(null);
     const [isLoading, setIsLoading] = React.useState(false);
     const [error, setError] = React.useState('');
@@ -13,27 +14,21 @@ const TemplateControls = ({ onLoad, onClear, fileNames }) => {
         setError('');
         try {
             await onLoad(files);
+            onNotify(`${files.length === 1 ? 'Vorlage' : 'Vorlagen'} geladen.`);
         } catch (failure) {
             setError(failure.message || 'Die Vorlage konnte nicht geladen werden.');
-        } finally {
-            setIsLoading(false);
-        }
+        } finally { setIsLoading(false); }
     };
-    const clear = () => {
-        onClear();
-        setError('');
-    };
-    const buttonClass = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:cursor-not-allowed disabled:opacity-50';
-    return _jsxs('section', { 'aria-labelledby': 'templateHeading', className: 'mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3', children: [
-        _jsx('h2', { id: 'templateHeading', className: 'text-sm font-semibold text-slate-800', children: 'Vorlage' }),
-        _jsx('p', { className: 'mt-1 text-xs text-slate-600', children: 'Unveränderliche Zeichenhilfe. Über „Vorlage“ links ein- und ausblenden.' }),
+    return _jsxs('details', { className: 'inspector-section template-controls', children: [
+        _jsxs('summary', { children: [_jsx(Icon, { name: 'layers' }), 'Vorlagen', fileNames.length > 0 && _jsx('span', { className: 'count-badge', children: fileNames.length })] }),
+        _jsx('p', { className: 'hint', children: 'GeoJSON als Zeichenhilfe laden. Die Vorlage bleibt unverändert und wird nicht mit den Pfeilen exportiert.' }),
         _jsx('input', { ref: inputRef, id: 'templateFileInput', type: 'file', hidden: true, multiple: true, accept: '.geojson,.json,application/geo+json,application/json', onChange: loadFiles }),
-        _jsxs('div', { className: 'mt-2 flex gap-2', children: [
-            _jsx('button', { id: 'loadTemplateBtn', type: 'button', disabled: isLoading, onClick: () => inputRef.current?.click(), className: buttonClass, children: isLoading ? 'Wird geladen …' : 'GeoJSON laden' }),
-            _jsx('button', { id: 'clearTemplateBtn', type: 'button', disabled: isLoading || !fileNames.length, onClick: clear, className: buttonClass, children: 'Leeren' }),
+        _jsxs('div', { className: 'template-actions', children: [
+            _jsxs('button', { id: 'loadTemplateBtn', type: 'button', disabled: isLoading, onClick: () => inputRef.current.click(), className: 'button button-secondary', children: [_jsx(Icon, { name: 'folder' }), isLoading ? 'Wird geladen …' : 'Vorlage laden'] }),
+            fileNames.length > 0 && _jsx('button', { id: 'clearTemplateBtn', type: 'button', disabled: isLoading, onClick: () => { onClear(); setError(''); onNotify('Vorlagen entfernt.'); }, className: 'button button-quiet', children: 'Entfernen' }),
         ] }),
-        fileNames.length > 0 && _jsx('p', { id: 'templateStatus', role: 'status', className: 'mt-2 break-words text-xs text-slate-600', children: fileNames.join(', ') }),
-        error && _jsx('p', { role: 'alert', className: 'mt-2 text-xs text-rose-700', children: error }),
+        fileNames.length > 0 && _jsx('p', { id: 'templateStatus', className: 'hint template-filenames', children: fileNames.join(', ') }),
+        error && _jsx('p', { role: 'alert', className: 'message message-error', children: error }),
     ] });
 };
 

@@ -2,14 +2,17 @@ import { readFile } from 'node:fs/promises';
 
 const FILES = [
   'index.html',
+  'styles.css',
   'index.js',
   'App.js',
   'components/ControlPanel.js',
+  'components/Icon.js',
   'components/TemplateControls.js',
   'components/ProjectControls.js',
   'components/ShapeParameterControl.js',
   'app/hooks/useEditorHistory.js',
   'app/state/history.js',
+  'app/state/projectChanges.js',
   'app/types/arrowModel.js',
   'app/types/shapeParameters.js',
   'app/map/savedArrows.js',

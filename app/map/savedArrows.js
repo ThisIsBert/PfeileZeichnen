@@ -25,7 +25,7 @@ export function createSavedArrowGroup(map, data, bindInteractions) {
     if (!polygons) return null;
     const group = L.layerGroup();
     const latlngs = polygons.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
-    const shape = L.polygon(latlngs, { color: 'red', fillColor: 'red', fillOpacity: 0.5, weight: 1 });
+    const shape = L.polygon(latlngs, { color: '#286879', fillColor: '#087f8c', fillOpacity: 0.32, weight: 1.5 });
     group.arrowId = arrow.id || globalThis.crypto?.randomUUID?.() || `arrow-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     group.savedAnchors = arrow.savedAnchors;
     group.arrowParameters = arrow.arrowParameters;

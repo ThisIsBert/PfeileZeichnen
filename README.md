@@ -18,14 +18,21 @@ Push static files directly to the default branch / Pages root. There is no compi
 ## Runtime dependencies
 
 Runtime CDN imports are pinned and documented in `DEPENDENCIES.md`.
+The desktop interface is styled locally in `styles.css`; no runtime CSS generator is required.
+
+## Desktop workspace
+
+The map and the inspector have separate areas. Only the inspector's properties scroll; finish/cancel, project file actions and GeoJSON export stay visible at the bottom. The idle inspector offers drawing, an accessible list of finished arrows and collapsible template tools. Selecting an arrow reveals its name and form. Rear/front taper and reference-zoom details are under **Verjüngung & Maßstab**.
+
+**Karte dezent** reduces the basemap's saturation without changing arrows or exports. Stützpunkte are circles and Kurvengriffe are squares, each with a 28 px hit area. Focus a point with Tab and move it with the arrow keys (1 screen pixel, or 10 with Shift). Finished arrows can also be selected from the list or with Enter/Space on their map outline.
 
 ## Drawing and editing
 
 - Click **Neuen Pfeil zeichnen**, then click the map for each anchor. There is no fixed anchor limit.
-- Click **Fertig** or press Enter to save. **Abbrechen** or Escape discards the current session.
+- Click **Pfeil fertigstellen** or press Enter to accept the arrow into the project. Save a project file separately to keep it for later. **Abbrechen** or Escape discards the current session.
 - Click, hold and drag an unselected saved arrow to move it as a whole. A short click selects it.
 - Select a saved arrow to edit its anchors and Bezier handles. Shift-click its outline to insert another anchor.
-- To copy a shape, select the target arrow (or draw a new one), click **Form übernehmen**, then click the source arrow. This copies all form parameters and their reference zoom while preserving the target anchors and name. Escape or **Pipette abbrechen** leaves the current editing session open.
+- To copy a shape, select the target arrow (or draw a new one), click **Form übernehmen**, then click the source arrow. This copies all form parameters and their reference zoom while preserving the target anchors and name. Escape or **Formübernahme abbrechen** leaves the current editing session open.
 - The outline uses tapered strips with round joins and a curved head. Overlaps are merged; loops retain holes.
 - Preview, saved arrows, and GeoJSON share the same outline. Exports use Polygon (or MultiPolygon when necessary), with closed rings and preserved holes.
 
@@ -35,7 +42,7 @@ Runtime CDN imports are pinned and documented in `DEPENDENCIES.md`.
 
 Each form slider also has a numeric field. Enter commits that field; Escape restores its value from before typing. Empty fields revert to their last valid value, and values outside the displayed limits are clamped on commit. Native text undo remains available while typing in a field.
 
-Pixel sizes refer to the arrow's **reference zoom**, shown alongside the current zoom and scale factor. Rear/front taper are dimensionless factors. The original shaft thickness and taper values are stored, so reselecting, copying or sampling an arrow keeps the same numbers. Older width-only records remain supported.
+Pixel sizes refer to the arrow's **reference zoom**, shown alongside the current zoom and scale factor under **Verjüngung & Maßstab**. Rear/front taper are dimensionless factors. The original shaft thickness and taper values are stored, so reselecting, copying or sampling an arrow keeps the same numbers. Older width-only records remain supported.
 
 If arrow geometry cannot be saved, the draft, name, form values and cancel baseline remain available. Fix the geometry, undo the last edit, or cancel explicitly. Copying or selecting another arrow cannot bypass a failed save.
 
@@ -43,13 +50,15 @@ If arrow geometry cannot be saved, the draft, name, form values and cancel basel
 
 Use **Projekt speichern** to download `projekt.pfeile.json`, and **Projekt laden** to continue editing it later. A project includes saved arrows with all anchors, Bezier handles, names, original form values and reference zooms; the open drawing/editing session and its cancel baseline; template geometries, file names and visibility; and the map center and zoom. Even unfinished or geometrically invalid drafts can be saved without finishing them.
 
-Loading replaces the current project and starts a fresh undo/redo history. The entire file and saved arrow geometry are checked before changing the current state. Unsupported versions, malformed files, invalid geometry and files above 20 MB leave the current project intact. The file format is versioned independently of GeoJSON; use **GeoJSON speichern** to export finished outlines for other software. No autosave or browser storage is used.
+The header indicates unsaved arrow or template changes. Merely selecting an unchanged arrow or navigating the map does not mark the content dirty; returning to the saved content with Undo clears the indicator. Template visibility is included. A new draft is protected even before it has points. With unsaved changes, loading offers **Abbrechen**, **Ohne Speichern laden**, or **Speichern und laden**. Leaving the page also invokes the browser's unsaved-changes prompt.
+
+Loading replaces the current project and starts a fresh undo/redo history. The entire file and saved arrow geometry are checked before changing the current state. Unsupported versions, malformed files, invalid geometry and files above 20 MB leave the current project intact. The file format is versioned independently of GeoJSON. Under **GeoJSON exportieren**, export all finished outlines as a file or copy the current arrow to the clipboard. Status messages appear in the inspector without blocking browser dialogs. No autosave or browser storage is used.
 
 ## GeoJSON templates
 
-Use **GeoJSON laden** in the **Vorlage** section to load one or more local `.geojson` or `.json` files in WGS84. Geometry objects, Features, FeatureCollections and GeometryCollections are supported, including points, lines, polygons and multipart geometries.
+Use **Vorlage laden** in the collapsible **Vorlagen** section to load one or more local `.geojson` or `.json` files in WGS84. Geometry objects, Features, FeatureCollections and GeometryCollections are supported, including points, lines, polygons and multipart geometries.
 
-Templates appear below the arrows, cannot be selected or moved, and let drawing clicks pass through. Toggle **Vorlage** in the layer control at the top left to hide or show them; **Leeren** removes the loaded templates. Further imports add to the same layer. Invalid files leave the existing template unchanged. Templates are excluded from arrow exports. Loading a template fits the view to it unless an arrow is currently being edited.
+Templates appear below the arrows, cannot be selected or moved, and let drawing clicks pass through. Toggle **Vorlage** in the layer control at the top left to hide or show them; **Entfernen** removes the loaded templates. Further imports add to the same layer. Invalid files leave the existing template unchanged. Templates are excluded from arrow exports. Loading a template fits the view to it unless an arrow is currently being edited.
 
 ## Tests
 
@@ -69,6 +78,7 @@ Run static checks locally:
 Edit the root-level source files directly:
 
 - `index.html`
+- `styles.css`
 - `index.js`
 - `App.js`
 - `components/ControlPanel.js`

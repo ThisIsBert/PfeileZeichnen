@@ -20,6 +20,7 @@ import { createArrowAnchorData, resolveArrowParameters, createArrowAnchorEntity,
 import { useEditorHistory } from './app/hooks/useEditorHistory.js';
 import { createSavedArrowGroup, getSavedArrowData } from './app/map/savedArrows.js';
 import { clampFormValue } from './app/types/shapeParameters.js';
+import { getProjectContentSignature } from './app/state/projectChanges.js';
 const App = () => {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
@@ -31,6 +32,16 @@ const App = () => {
     const editingArrowLayerRef = useRef(null);
     const history = useEditorHistory();
     const [editorError, setEditorError] = useState('');
+    const [notice, setNotice] = useState(null);
+    const noticeSequenceRef = useRef(0);
+    const notify = useCallback((message, tone = 'success') => {
+        setNotice({ message, tone, id: ++noticeSequenceRef.current });
+    }, []);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [projectFileName, setProjectFileName] = useState('');
+    const savedProjectSignatureRef = useRef(null);
+    const [mutedMap, setMutedMap] = useState(true);
+    const [, setTemplateVisibilityVersion] = useState(0);
     const [mapZoom, setMapZoom] = useState(null);
     const isSceneDraggingRef = useRef(false);
     const ignoreDragClickRef = useRef(false);
@@ -71,7 +82,24 @@ const App = () => {
             onDragStart: () => { isSceneDraggingRef.current = true; history.begin(); },
             onDragEnd: () => { isSceneDraggingRef.current = false; history.end(); },
         });
-    }, [history.begin, history.end]);
+        shape.bindTooltip(() => {
+            const label = document.createElement('span');
+            label.textContent = arrowGroup.arrowName;
+            return label;
+        });
+        shape.on('add', () => {
+            const element = shape.getElement();
+            element.setAttribute('tabindex', '0');
+            element.setAttribute('role', 'button');
+            element.setAttribute('aria-label', `${arrowGroup.arrowName} bearbeiten`);
+            element.onkeydown = event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                event.stopPropagation();
+                history.run(() => handleSelectArrowRef.current?.(arrowGroup));
+            };
+        });
+    }, [history.begin, history.end, history.run]);
     const buildSavedArrow = useCallback(data => createSavedArrowGroup(mapRef.current, data, bindSavedArrow), [bindSavedArrow]);
     // Refs for Leaflet objects
     const anchorMarkersRef = useRef(new Map());
@@ -246,7 +274,7 @@ const App = () => {
             const latlngs = validCurveData.map(d => map.layerPointToLatLng(L.point(d.pt.x, d.pt.y)));
             if (latlngs.length >= 2) {
                 const previewLine = L.polyline(latlngs, {
-                    color: 'green', dashArray: '5,5', weight: 1, interactive: editingState === EditingState.EditingSelected,
+                    color: '#086672', dashArray: '5,5', weight: 1, interactive: editingState === EditingState.EditingSelected,
                     bubblingMouseEvents: false, isPreviewLine: true
                 });
                 previewLine.on('click', (ev) => {
@@ -279,7 +307,7 @@ const App = () => {
                 const outlineLatLngs = outlinePoints.map(polygon => polygon.map(ring => ring.map(p => map.layerPointToLatLng(L.point(p.x, p.y)))));
                 if (outlineLatLngs.length > 0) {
                     const arrowPreviewShape = L.polygon(outlineLatLngs, {
-                        color: 'blue', fillColor: 'blue', fillOpacity: 0.3, weight: 1, interactive: editingState === EditingState.EditingSelected, bubblingMouseEvents: false
+                        color: '#086672', fillColor: '#087f8c', fillOpacity: 0.22, weight: 2, interactive: editingState === EditingState.EditingSelected, bubblingMouseEvents: false
                     });
                     arrowPreviewShape.on('mousedown', (ev) => {
                         L.DomEvent.stopPropagation(ev);
@@ -401,7 +429,7 @@ const App = () => {
             arrowName: currentArrowName.trim() || `Unbenannter Pfeil ${arrowNameCounter}`,
         });
         if (!group || !arrowLayer) {
-            setEditorError('Der Pfeil konnte nicht gespeichert werden. Prüfe die Stützpunkte oder wähle Rückgängig. Deine Bearbeitung bleibt erhalten.');
+            setEditorError('Der Pfeil konnte nicht fertiggestellt werden. Prüfe die Stützpunkte oder wähle Rückgängig. Deine Bearbeitung bleibt erhalten.');
             return null;
         }
         if (selectedArrowGroup) arrowLayer.removeLayer(selectedArrowGroup);
@@ -493,11 +521,11 @@ const App = () => {
             return;
         }
         if (currentAnchors.length >= 2) {
-            handleConfirm(true);
+            if (handleConfirm(true)) notify('Pfeil fertiggestellt.');
             return;
         }
-        setEditorError('Setze mindestens zwei unterschiedliche Stützpunkte, bevor du den Pfeil speicherst.');
-    }, [editingState, currentAnchors.length, handleConfirm]);
+        setEditorError('Setze mindestens zwei unterschiedliche Stützpunkte, bevor du den Pfeil fertigstellst.');
+    }, [editingState, currentAnchors.length, handleConfirm, notify]);
     const handleDrawArrow = useCallback(() => {
         if (editingState !== EditingState.Idle) {
             handleCancel();
@@ -609,7 +637,7 @@ const App = () => {
             return null;
         return generateGeoJsonForArrow(map, anchorsData, params, name);
     }, []);
-    const handleCopyGeoJson = useCallback(() => {
+    const handleCopyGeoJson = useCallback(async () => {
         if (editingState === EditingState.Idle || currentAnchors.length < 2)
             return;
         const rearWidthPx = Math.max(2, shaftThicknessPx * rearTaper);
@@ -625,20 +653,21 @@ const App = () => {
         }), currentArrowName);
         if (feature) {
             const jsonString = JSON.stringify(feature, null, 2);
-            navigator.clipboard.writeText(jsonString)
-                .then(() => alert("GeoJSON copied to clipboard!"))
-                .catch(err => {
-                console.error('Clipboard copy failed:', err);
-                alert('Failed to copy GeoJSON. Check console.');
-            });
+            try {
+                if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+                await navigator.clipboard.writeText(jsonString);
+                notify('GeoJSON in die Zwischenablage kopiert.');
+            } catch {
+                notify('Kopieren war nicht möglich. Prüfe die Zwischenablage-Berechtigung deines Browsers.', 'error');
+            }
         }
         else {
-            alert("Could not generate GeoJSON for the current arrow.");
+            notify('GeoJSON konnte nicht erstellt werden. Prüfe die Stützpunkte des Pfeils.', 'error');
         }
-    }, [editingState, currentAnchors.length, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, generateGeoJsonForArrowForMap]);
+    }, [editingState, currentAnchors.length, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, generateGeoJsonForArrowForMap, notify]);
     const handleSaveAllGeoJson = useCallback(() => {
         if (editingState !== EditingState.Idle && currentAnchors.length > 0) {
-            alert("Please finish or cancel current editing before saving all arrows.");
+            notify('Stelle die aktuelle Bearbeitung fertig oder brich sie ab, bevor du alle Pfeile exportierst.', 'error');
             return;
         }
         const features = [];
@@ -652,7 +681,7 @@ const App = () => {
             }
         });
         if (features.length === 0) {
-            alert("No arrows to export.");
+            notify('Es sind noch keine fertigen Pfeile zum Exportieren vorhanden.', 'error');
             return;
         }
         const featureCollection = { type: "FeatureCollection", features };
@@ -665,8 +694,9 @@ const App = () => {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, [editingState, currentAnchors.length, generateGeoJsonForArrowForMap]);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        notify(`${features.length} ${features.length === 1 ? 'Pfeil' : 'Pfeile'} als GeoJSON exportiert.`);
+    }, [editingState, currentAnchors.length, generateGeoJsonForArrowForMap, notify]);
     const handleLoadTemplate = useCallback(async files => {
         // Prepare the whole batch off the map; an invalid file changes nothing.
         const layers = await Promise.all(files.map(async file => {
@@ -688,7 +718,7 @@ const App = () => {
         if (bounds.isValid() && editingStateRef.current === EditingState.Idle) {
             map.fitBounds(bounds, {
                 paddingTopLeft: [24, 24],
-                paddingBottomRight: [Math.min(360, map.getSize().x / 2), 24],
+                paddingBottomRight: [24, 24],
                 maxZoom: 16,
             });
         }
@@ -698,6 +728,11 @@ const App = () => {
         templateDataRef.current = [];
         setTemplateFileNames([]);
     }, []);
+    const captureProjectSignature = useCallback(() => getProjectContentSignature(history.captureRef.current(), {
+        data: { type: 'FeatureCollection', features: templateDataRef.current.flatMap(data => data.features) },
+        visible: mapRef.current?.hasLayer(templateLayerRef.current) ?? true,
+        fileNames: templateFileNames,
+    }), [history.captureRef, templateFileNames]);
     const handleSaveProject = useCallback(() => {
         const map = mapRef.current;
         if (!map || isSceneDraggingRef.current) throw new Error('Die Karte ist noch nicht bereit.');
@@ -712,12 +747,15 @@ const App = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'projekt.pfeile.json';
+        link.download = projectFileName || 'projekt.pfeile.json';
         document.body.appendChild(link);
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, [history.captureRef, templateFileNames]);
+        savedProjectSignatureRef.current = captureProjectSignature();
+        setHasUnsavedChanges(false);
+        setProjectFileName(projectFileName || 'projekt.pfeile.json');
+    }, [history.captureRef, templateFileNames, projectFileName, captureProjectSignature]);
     const handleLoadProject = useCallback(async file => {
         if (file.size > MAX_PROJECT_BYTES) throw new Error('Die Projektdatei darf höchstens 20 MB groß sein.');
         const project = parseProject(await file.text());
@@ -745,6 +783,9 @@ const App = () => {
         map.stop();
         map.setView(project.view.center, project.view.zoom, { animate: false });
         history.reset();
+        savedProjectSignatureRef.current = getProjectContentSignature(project.editor, project.template);
+        setHasUnsavedChanges(false);
+        setProjectFileName(file.name);
     }, [history.restoreRef, history.reset, bindSavedArrow]);
     // Effects
     useEffect(() => {
@@ -754,6 +795,7 @@ const App = () => {
         mapRef.current = map;
         setMapZoom(map.getZoom());
         map.on('zoomend', () => setMapZoom(map.getZoom()));
+        map.on('overlayadd overlayremove', () => setTemplateVisibilityVersion(version => version + 1));
         templateLayerRef.current = templateLayer;
         drawingLayerRef.current = drawingLayer;
         arrowLayerRef.current = arrowLayer;
@@ -790,6 +832,7 @@ const App = () => {
     }, [editingState, currentAnchors.length, addAnchor, endEditingSession, isPickingShape, history.run]);
     useEffect(() => {
         const onWindowKeyDown = (event) => {
+            if (event.target.closest?.('dialog[open]')) return;
             const editingField = event.target.closest?.('input:not([type=range]):not([type=checkbox]):not([type=file]), textarea, [contenteditable="true"]');
             if ((event.ctrlKey || event.metaKey) && !event.altKey && !editingField) {
                 const key = event.key.toLowerCase();
@@ -868,6 +911,24 @@ const App = () => {
             return;
         }
         const currentAnchorIds = new Set(currentAnchors.map(a => a.id));
+        const configureMarker = (marker, label, onMove) => {
+            const element = marker.getElement();
+            element.setAttribute('aria-label', label);
+            element.setAttribute('aria-describedby', 'pointKeyboardHint');
+            element.title = `${label}. Mit den Pfeiltasten verschieben; Umschalt für 10 Pixel.`;
+            element.onkeydown = event => {
+                const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+                if (!direction || shapePickerRef.current) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const distance = event.shiftKey ? 10 : 1;
+                const point = map.latLngToLayerPoint(marker.getLatLng());
+                history.run(() => {
+                    marker.setLatLng(map.layerPointToLatLng(L.point(point.x + direction[0] * distance, point.y + direction[1] * distance)));
+                    onMove({ target: marker });
+                });
+            };
+        };
         // Cleanup phase for all types of markers and lines
         [anchorMarkersRef, handle1MarkersRef, handle2MarkersRef, connector1LinesRef, connector2LinesRef].forEach(ref => {
             ref.current.forEach((layer, id) => {
@@ -924,6 +985,7 @@ const App = () => {
                 });
                 anchorMarkersRef.current.set(anchor.id, existingAnchorMarker);
             }
+            configureMarker(existingAnchorMarker, `Stützpunkt ${anchorIndex + 1}`, event => handleAnchorDrag(event, anchor.id));
             // Handle 1 & Connector 1
             if (anchor.handle1 && anchorIndex > 0) {
                 const handle1LatLng = L.latLng(anchor.handle1.lat, anchor.handle1.lng);
@@ -940,6 +1002,7 @@ const App = () => {
                     h1Marker.on('click', L.DomEvent.stopPropagation);
                     handle1MarkersRef.current.set(anchor.id, h1Marker);
                 }
+                configureMarker(h1Marker, `Eingehender Kurvengriff von Stützpunkt ${anchorIndex + 1}`, event => handleHandleDrag(event, anchor.id, 1));
                 let c1Line = connector1LinesRef.current.get(anchor.id);
                 const c1LatLngs = [anchorLatLng, handle1LatLng];
                 if (c1Line) {
@@ -978,6 +1041,7 @@ const App = () => {
                     h2Marker.on('click', L.DomEvent.stopPropagation);
                     handle2MarkersRef.current.set(anchor.id, h2Marker);
                 }
+                configureMarker(h2Marker, `Ausgehender Kurvengriff von Stützpunkt ${anchorIndex + 1}`, event => handleHandleDrag(event, anchor.id, 2));
                 let c2Line = connector2LinesRef.current.get(anchor.id);
                 const c2LatLngs = [anchorLatLng, handle2LatLng];
                 if (c2Line) {
@@ -1001,7 +1065,7 @@ const App = () => {
                 }
             }
         });
-    }, [currentAnchors, editingState , handleAnchorDragStart, handleAnchorDrag, handleAnchorDragEnd, handleGenericDragStart, handleHandleDrag, handleGenericDragEnd]);
+    }, [currentAnchors, editingState, handleAnchorDragStart, handleAnchorDrag, handleAnchorDragEnd, handleGenericDragStart, handleHandleDrag, handleGenericDragEnd, history.run]);
     useEffect(() => {
         // Sampling a source must not drag a target anchor or Bezier handle.
         [anchorMarkersRef, handle1MarkersRef, handle2MarkersRef].forEach(ref => {
@@ -1009,7 +1073,10 @@ const App = () => {
                 if (isPickingShape) marker.dragging.disable();
                 else marker.dragging.enable();
                 const element = marker.getElement();
-                if (element) element.style.pointerEvents = isPickingShape ? 'none' : '';
+                if (element) {
+                    element.style.pointerEvents = isPickingShape ? 'none' : '';
+                    element.setAttribute('tabindex', isPickingShape ? '-1' : '0');
+                }
             });
         });
     }, [isPickingShape, currentAnchors]);
@@ -1057,6 +1124,17 @@ const App = () => {
     useEffect(() => {
         setEditorError('');
     }, [currentAnchors, currentShaftThicknessPx, currentRearTaper, currentFrontTaper, currentHeadLengthPx, currentHeadWidthPx]);
+    useEffect(() => {
+        const signature = captureProjectSignature();
+        if (savedProjectSignatureRef.current === null) savedProjectSignatureRef.current = signature;
+        setHasUnsavedChanges(signature !== savedProjectSignatureRef.current);
+    });
+    useEffect(() => {
+        if (!hasUnsavedChanges) return;
+        const warnBeforeLeaving = event => { event.preventDefault(); event.returnValue = ''; };
+        window.addEventListener('beforeunload', warnBeforeLeaving);
+        return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+    }, [hasUnsavedChanges]);
     // Control panel contract
     const canEditParameters = getCanEditParameters(editingState) && currentAnchors.length >= 2;
     const canCopyCurrentArrow = isEditing(editingState) && currentAnchors.length >= 2;
@@ -1066,6 +1144,10 @@ const App = () => {
     const controlPanelUiState = {
         editingState,
         editorError,
+        notice,
+        hasUnsavedChanges,
+        projectFileName,
+        savedArrows: arrowLayerRef.current?.getLayers().map(group => ({ id: group.arrowId, name: group.arrowName })) ?? [],
         templateFileNames,
         canUndo: history.canUndo,
         canRedo: history.canRedo,
@@ -1089,6 +1171,12 @@ const App = () => {
         frontTaper,
     };
     const controlPanelActions = {
+        onNotify: notify,
+        onDismissNotice: () => setNotice(null),
+        onSelectArrow: id => {
+            const group = arrowLayerRef.current?.getLayers().find(arrow => arrow.arrowId === id);
+            if (group) history.run(() => handleSelectArrow(group));
+        },
         onSaveProject: handleSaveProject,
         onLoadProject: handleLoadProject,
         onToggleShapePicker: () => setIsPickingShape(previous => !previous),
@@ -1098,16 +1186,25 @@ const App = () => {
         onRedo: history.redo,
         onBeginChange: history.begin,
         onEndChange: history.end,
-        onDrawArrow: () => history.run(handleDrawArrow),
+        onDrawArrow: () => { setNotice(null); history.run(handleDrawArrow); },
         onFinishArrow: () => history.run(endEditingSession),
         onCancelArrow: () => history.run(handleCancel),
         onCopyArrow: () => history.run(handleCopyArrow),
-        onDeleteArrow: () => history.run(handleDeleteSelectedArrow),
+        onDeleteArrow: () => { history.run(handleDeleteSelectedArrow); notify('Pfeil gelöscht. Mit Rückgängig wiederherstellen.'); },
         onArrowNameChange: value => history.run(() => setCurrentArrowName(value)),
         onCopyGeoJson: handleCopyGeoJson,
         onSaveAllGeoJson: handleSaveAllGeoJson,
         onShapeParamChange: (key, value) => history.run(() => handleShapeParamChange(key, value)),
     };
-    return (_jsxs("div", { className: "relative h-full w-full flex", children: [_jsx("div", { ref: mapContainerRef, id: "map", className: "h-full w-full grow" }), _jsx(ControlPanel, { uiState: controlPanelUiState, actions: controlPanelActions })] }));
+    return _jsxs('main', { className: 'app-shell', children: [
+        _jsxs('section', { className: 'map-workspace', 'aria-label': 'Karte und Zeichenfläche', children: [
+            _jsx('div', { ref: mapContainerRef, id: 'map', className: mutedMap ? 'map-muted' : '' }),
+            _jsxs('label', { className: 'map-display-control', children: [
+                _jsx('input', { id: 'mutedMapToggle', type: 'checkbox', checked: mutedMap, onChange: event => setMutedMap(event.target.checked) }),
+                'Karte dezent',
+            ] }),
+        ] }),
+        _jsx(ControlPanel, { uiState: controlPanelUiState, actions: controlPanelActions }),
+    ] });
 };
 export default App;

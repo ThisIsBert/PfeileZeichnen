@@ -17,11 +17,11 @@ const ShapeParameterControl = ({ id, label, min, max, step, value, paramKey, dis
         onEnd();
     };
     const unit = paramKey.endsWith('Taper') ? '×' : 'px';
-    return _jsxs('div', { className: 'flex flex-col gap-1', children: [
-        _jsxs('div', { className: 'flex items-center justify-between gap-2 text-xs', children: [
-            _jsx('label', { htmlFor: `${id}Number`, className: 'font-medium text-slate-700', children: `${label} (${unit})` }),
+    return _jsxs('div', { className: 'parameter-control', children: [
+        _jsxs('div', { className: 'parameter-heading', children: [
+            _jsx('label', { htmlFor: `${id}Number`, children: `${label} (${unit})` }),
             _jsx('input', { id: `${id}Number`, type: 'number', min, max, step, value: draft, disabled,
-                className: 'w-20 rounded border border-slate-300 px-1.5 py-1 text-right tabular-nums focus:border-cyan-600 focus:outline-none disabled:bg-slate-100',
+                className: 'number-input',
                 onFocus: () => { focused.current = true; initial.current = value; onBegin(); },
                 onChange: event => {
                     const text = event.target.value;
@@ -46,7 +46,7 @@ const ShapeParameterControl = ({ id, label, min, max, step, value, paramKey, dis
         _jsx('input', { id, type: 'range', min, max, step, value, disabled, 'aria-label': `${label} (${unit})`,
             onPointerDown: onBegin, onPointerUp: onEnd, onPointerCancel: onEnd, onBlur: onEnd,
             onChange: event => onChange(paramKey, Number(event.target.value)),
-            className: 'w-full accent-cyan-600 disabled:cursor-not-allowed disabled:opacity-40',
+            className: 'parameter-range',
         }),
     ] });
 };

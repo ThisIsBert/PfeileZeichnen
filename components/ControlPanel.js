@@ -1,84 +1,150 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs } from 'react/jsx-runtime';
 import React from 'react';
+import Icon from './Icon.js';
 import ShapeParameterControl from './ShapeParameterControl.js';
 import TemplateControls from './TemplateControls.js';
 import ProjectControls from './ProjectControls.js';
 import { EditingState } from '../types.js';
 
-/**
- * @typedef {Object} ControlPanelUiState
- * @property {import('../types.js').EditingState} editingState
- * @property {string[]} templateFileNames
- * @property {number} anchorCount
- * @property {boolean} canFinishArrow
- * @property {boolean} canCopyArrow
- * @property {boolean} canDeleteArrow
- * @property {string} arrowName
- * @property {boolean} canEditName
- * @property {boolean} canCopyGeoJson
- * @property {boolean} canSaveAllGeoJson
- * @property {boolean} isPickingShape
- * @property {boolean} canPickShape
- * @property {boolean} canUndo
- * @property {boolean} canRedo
- * @property {string} editorError
- * @property {number|null} parameterBaseZoom
- * @property {number|null} mapZoom
- * @property {boolean} canEditParameters
- * @property {number} shaftThickness
- * @property {number} headLength
- * @property {number} headWidth
- * @property {number} rearTaper
- * @property {number} frontTaper
- */
-
-/**
- * @typedef {Object} ControlPanelActions
- * @property {() => void} onSaveProject
- * @property {(file: File) => Promise<void>} onLoadProject
- * @property {(files: File[]) => Promise<void>} onLoadTemplate
- * @property {() => void} onClearTemplate
- * @property {() => void} onToggleShapePicker
- * @property {() => void} onUndo
- * @property {() => void} onRedo
- * @property {() => void} onBeginChange
- * @property {() => void} onEndChange
- * @property {() => void} onDrawArrow
- * @property {() => void} onFinishArrow
- * @property {() => void} onCancelArrow
- * @property {() => void} onCopyArrow
- * @property {() => void} onDeleteArrow
- * @property {(value: string) => void} onArrowNameChange
- * @property {() => void} onCopyGeoJson
- * @property {() => void} onSaveAllGeoJson
- * @property {(key: 'shaftThickness'|'headLength'|'headWidth'|'rearTaper'|'frontTaper', value: number) => void} onShapeParamChange
- */
-
-/**
- * @typedef {Object} ControlPanelProps
- * @property {ControlPanelUiState} uiState
- * @property {ControlPanelActions} actions
- */
-
-/**
- * @param {ControlPanelProps} props
- */
+/** Desktop inspector. Only the properties scroll; document actions stay visible. */
 const ControlPanel = ({ uiState, actions }) => {
-    const { templateFileNames, editorError, canUndo, canRedo, parameterBaseZoom, mapZoom, isPickingShape, canPickShape, editingState, anchorCount, canFinishArrow, canCopyArrow, canDeleteArrow, arrowName, canEditName, canCopyGeoJson, canSaveAllGeoJson, canEditParameters, shaftThickness, headLength, headWidth, rearTaper, frontTaper } = uiState;
-    const { onSaveProject, onLoadProject, onUndo, onRedo, onBeginChange, onEndChange, onToggleShapePicker, onLoadTemplate, onClearTemplate, onDrawArrow, onFinishArrow, onCancelArrow, onCopyArrow, onDeleteArrow, onArrowNameChange, onCopyGeoJson, onSaveAllGeoJson, onShapeParamChange } = actions;
-    const isEditingOrDrawing = editingState === EditingState.DrawingNew || editingState === EditingState.EditingSelected;
-    const [showShapeControls, setShowShapeControls] = React.useState(true);
-
-    const baseButtonClass = "inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
-    const neutralButtonClass = `${baseButtonClass} border-slate-300 bg-white text-slate-700 hover:bg-slate-100 focus:ring-slate-400`;
-
-    const renderSlider = (id, label, min, max, step, value, paramKey) => _jsx(ShapeParameterControl, {
+    const {
+        editingState, anchorCount, arrowName, savedArrows, templateFileNames,
+        hasUnsavedChanges, projectFileName, notice, editorError,
+        canUndo, canRedo, canFinishArrow, canCopyArrow, canDeleteArrow,
+        canEditName, canEditParameters, canPickShape, isPickingShape,
+        canCopyGeoJson, canSaveAllGeoJson, parameterBaseZoom, mapZoom,
+        shaftThickness, headLength, headWidth, rearTaper, frontTaper,
+    } = uiState;
+    const {
+        onDrawArrow, onFinishArrow, onCancelArrow, onUndo, onRedo,
+        onBeginChange, onEndChange, onArrowNameChange, onShapeParamChange,
+        onToggleShapePicker, onCopyArrow, onDeleteArrow, onSelectArrow,
+        onSaveProject, onLoadProject, onLoadTemplate, onClearTemplate,
+        onCopyGeoJson, onSaveAllGeoJson, onNotify, onDismissNotice,
+    } = actions;
+    const isActive = editingState !== EditingState.Idle;
+    const isDrawing = editingState === EditingState.DrawingNew;
+    const [showForm, setShowForm] = React.useState(true);
+    const [showExport, setShowExport] = React.useState(false);
+    const exportRef = React.useRef(null);
+    React.useEffect(() => {
+        const close = event => {
+            if (!exportRef.current?.contains(event.target)) setShowExport(false);
+        };
+        document.addEventListener('pointerdown', close);
+        return () => document.removeEventListener('pointerdown', close);
+    }, []);
+    const slider = (id, label, min, max, step, value, paramKey) => _jsx(ShapeParameterControl, {
         id, label, min, max, step, value, paramKey, disabled: !canEditParameters,
         onChange: onShapeParamChange, onBegin: onBeginChange, onEnd: onEndChange,
     });
 
-    return (_jsxs("div", { id: "controlPanel", className: "absolute top-4 right-4 z-[10000] w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-3 shadow-2xl backdrop-blur-sm", children: [_jsxs("div", { className: "mb-3 grid grid-cols-2 gap-2", children: [_jsx("button", { id: "undoBtn", type: "button", title: "Rückgängig (Strg/Cmd+Z)", onClick: onUndo, disabled: !canUndo, className: neutralButtonClass, children: "↶ Rückgängig" }), _jsx("button", { id: "redoBtn", type: "button", title: "Wiederholen (Strg+Y / Strg/Cmd+Umschalt+Z)", onClick: onRedo, disabled: !canRedo, className: neutralButtonClass, children: "↷ Wiederholen" })] }), editorError && _jsx("p", { id: "editorError", role: "alert", className: "mb-3 rounded-lg border border-rose-300 bg-rose-50 p-2 text-sm text-rose-800", children: editorError }), isEditingOrDrawing && _jsxs("div", { className: "mb-3 rounded-xl border border-cyan-200 bg-cyan-50 p-3", children: [_jsx("p", { role: "status", className: "text-sm font-semibold text-slate-800", children: `${anchorCount} Stützpunkte` }), _jsx("p", { className: "mt-1 text-xs text-slate-600", children: editingState === EditingState.DrawingNew ? "Jeder Kartenklick setzt einen weiteren Stützpunkt. Fertig oder Enter speichert, Esc verwirft." : "Stützpunkte und blaue Griffe ziehen. Umschalt + Klick auf den Pfeil fügt einen Stützpunkt ein. Fertig oder Enter speichert, Esc verwirft." }), _jsxs("div", { className: "mt-2 grid grid-cols-2 gap-2", children: [_jsx("button", { id: "finishArrowBtn", onClick: onFinishArrow, disabled: !canFinishArrow, className: `${baseButtonClass} border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500`, children: "Fertig" }), _jsx("button", { id: "cancelArrowBtn", onClick: onCancelArrow, className: neutralButtonClass, children: "Abbrechen" })] })] }), _jsxs("div", { className: "grid grid-cols-2 gap-2", children: [_jsx("button", { id: "drawArrowBtn", title: "Neuen Pfeil zeichnen", onClick: onDrawArrow, disabled: isEditingOrDrawing, className: `${baseButtonClass} col-span-2 border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-700 focus:ring-cyan-500`, children: _jsxs(React.Fragment, { children: [_jsx("svg", { viewBox: "0 0 24 24", className: "h-4 w-4", fill: "none", stroke: "currentColor", strokeWidth: "2", "aria-hidden": "true", children: _jsx("path", { d: "M5 12h14M13 6l6 6-6 6" }) }), "Neuen Pfeil zeichnen"] }) }), _jsx("button", { id: "copyArrowBtn", title: "Aktuell bearbeiteten Pfeil kopieren", onClick: onCopyArrow, disabled: !canCopyArrow, className: neutralButtonClass, children: _jsxs(React.Fragment, { children: [_jsx("svg", { viewBox: "0 0 24 24", className: "h-4 w-4", fill: "none", stroke: "currentColor", strokeWidth: "2", "aria-hidden": "true", children: _jsx("path", { d: "M9 9h11v11H9zM4 4h11v11" }) }), "Kopieren"] }) }), _jsx("button", { id: "deleteArrowBtn", title: "Ausgewählten Pfeil löschen", onClick: onDeleteArrow, disabled: !canDeleteArrow, className: `${baseButtonClass} border-rose-600 bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-500`, children: _jsxs(React.Fragment, { children: [_jsx("svg", { viewBox: "0 0 24 24", className: "h-4 w-4", fill: "none", stroke: "currentColor", strokeWidth: "2", "aria-hidden": "true", children: _jsx("path", { d: "M3 6h18M8 6V4h8v2m-7 4v8m4-8v8M6 6l1 14h10l1-14" }) }), "Löschen"] }) })] }), _jsxs("div", { className: "mt-3 rounded-xl border border-slate-200 bg-white p-2", children: [_jsxs("button", { type: "button", className: "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-slate-800 hover:bg-slate-100", onClick: () => setShowShapeControls(!showShapeControls), children: [_jsx("span", { children: "Formparameter" }), _jsx("span", { className: "text-slate-500", children: showShapeControls ? "-" : "+" })] }), _jsx("button", { id: "pickShapeBtn", type: "button", title: "Formparameter von einem anderen Pfeil übernehmen", "aria-pressed": isPickingShape, disabled: !canPickShape, onClick: onToggleShapePicker, className: `${neutralButtonClass} mt-2 w-full ${isPickingShape ? 'border-violet-500 bg-violet-100 text-violet-800' : ''}`, children: _jsxs(React.Fragment, { children: [_jsx("svg", { viewBox: "0 0 24 24", className: "h-4 w-4", fill: "none", stroke: "currentColor", strokeWidth: "2", "aria-hidden": "true", children: _jsx("path", { d: "m16 3 5 5-3 3-2-2-8 8-4 1 1-4 8-8-2-2 3-3z" }) }), isPickingShape ? "Pipette abbrechen" : "Form übernehmen"] }) }), isPickingShape && _jsx("p", { id: "shapePickerHint", role: "status", className: "mt-2 px-1 text-xs text-violet-800", children: "Den Pfeil anklicken, dessen Form übernommen werden soll. Esc beendet die Pipette." }), showShapeControls && (_jsxs("div", { className: "mt-2 space-y-2 px-1 pb-1", children: [_jsx("p", { id: "parameterUnits", className: "text-xs text-slate-500", children: parameterBaseZoom !== null ? `Pixelwerte bei Referenzzoom ${parameterBaseZoom}. Aktuell Zoom ${mapZoom ?? parameterBaseZoom} (×${Math.pow(2, (mapZoom ?? parameterBaseZoom) - parameterBaseZoom).toFixed(2)}). Schaft hinten/vorne sind Faktoren.` : "Pixelwerte gelten beim Anlegen des Pfeils. Schaft hinten/vorne sind Faktoren." }), renderSlider('shaftThicknessSlider', 'Schaftdicke', 2, 120, 1, shaftThickness, 'shaftThickness'), renderSlider('headLengthSlider', 'Pfeilspitzen-Länge', 2, 240, 1, headLength, 'headLength'), renderSlider('headWidthSlider', 'Pfeilspitzen-Breite', 2, 240, 1, headWidth, 'headWidth'), renderSlider('rearTaperSlider', 'Schaft hinten', 0.2, 2.5, 0.01, rearTaper, 'rearTaper'), renderSlider('frontTaperSlider', 'Schaft vorne', 0.2, 2.5, 0.01, frontTaper, 'frontTaper')] }))] }), _jsxs("div", { className: "mt-3 rounded-xl border border-slate-200 bg-white p-3", children: [_jsx("label", { htmlFor: "arrowNameInput", className: "block text-xs font-semibold uppercase tracking-wide text-slate-500", children: "Pfeilname (optional)" }), _jsx("input", { type: "text", id: "arrowNameInput", placeholder: "erscheint dann in GeoJSON", value: arrowName, onFocus: onBeginChange, onBlur: onEndChange, onChange: (e) => onArrowNameChange(e.target.value), disabled: !canEditName, className: "mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm shadow-sm focus:border-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 disabled:bg-slate-100 disabled:text-slate-400" }), _jsxs("div", { className: "mt-2 grid grid-cols-2 gap-2", children: [_jsx("button", { id: "copyGeoJsonBtn", title: "Aktuellen Pfeil-Umriss als GeoJSON kopieren", onClick: onCopyGeoJson, disabled: !canCopyGeoJson, className: `${neutralButtonClass} col-span-2`, children: _jsxs(React.Fragment, { children: [_jsx("svg", { viewBox: "0 0 24 24", className: "h-4 w-4", fill: "none", stroke: "currentColor", strokeWidth: "2", "aria-hidden": "true", children: _jsx("path", { d: "M8 4h10v16H6V6l2-2zM8 4v2h2" }) }), "GeoJSON kopieren"] }) }), _jsx("button", { id: "saveAllGeoJsonBtn", title: "Alle finalisierten Pfeile als GeoJSON-Datei speichern", onClick: onSaveAllGeoJson, disabled: !canSaveAllGeoJson, className: `${baseButtonClass} col-span-2 border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500`, children: _jsxs(React.Fragment, { children: [_jsx("svg", { viewBox: "0 0 24 24", className: "h-4 w-4", fill: "none", stroke: "currentColor", strokeWidth: "2", "aria-hidden": "true", children: _jsx("path", { d: "M12 3v12m0 0l4-4m-4 4-4-4M4 19h16" }) }), "GeoJSON speichern"] }) })] })] }), _jsx(ProjectControls, { onSave: onSaveProject, onLoad: onLoadProject }), _jsx(TemplateControls, { fileNames: templateFileNames, onLoad: onLoadTemplate, onClear: onClearTemplate })] }));
+    return _jsxs('aside', { id: 'controlPanel', className: 'control-panel', 'aria-label': 'Pfeil- und Projektwerkzeuge', children: [
+        _jsxs('header', { className: 'panel-header', children: [
+            _jsxs('div', { className: 'app-brand', children: [
+                _jsx('span', { className: 'brand-icon', children: _jsx(Icon, { name: 'arrow' }) }),
+                _jsxs('div', { children: [
+                    _jsx('h1', { children: 'Pfeile zeichnen' }),
+                    _jsx('p', { className: 'app-subtitle', children: 'ThisIsBerts Kartenwerkzeug' }),
+                ] }),
+            ] }),
+            _jsxs('div', { id: 'saveState', className: `save-state ${hasUnsavedChanges ? 'is-dirty' : ''}`, role: 'status', children: [
+                _jsx('span', { className: 'status-dot', 'aria-hidden': 'true' }),
+                _jsx('span', { children: hasUnsavedChanges ? 'Ungesicherte Änderungen' : projectFileName ? 'Projektstand gesichert' : 'Neues Projekt' }),
+                projectFileName && _jsx('span', { className: 'project-filename', title: projectFileName, children: projectFileName }),
+            ] }),
+        ] }),
+        _jsxs('div', { className: 'history-toolbar', 'aria-label': 'Bearbeitungsverlauf', children: [
+            _jsxs('button', { id: 'undoBtn', type: 'button', className: 'button button-quiet', title: canUndo ? 'Rückgängig (Strg/Cmd+Z)' : 'Noch keine Änderung zum Rückgängigmachen', disabled: !canUndo, onClick: onUndo, children: [_jsx(Icon, { name: 'undo' }), 'Rückgängig'] }),
+            _jsxs('button', { id: 'redoBtn', type: 'button', className: 'button button-quiet', title: canRedo ? 'Wiederholen (Strg+Y / Strg/Cmd+Umschalt+Z)' : 'Keine rückgängig gemachte Änderung vorhanden', disabled: !canRedo, onClick: onRedo, children: [_jsx(Icon, { name: 'redo' }), 'Wiederholen'] }),
+        ] }),
+        _jsxs('div', { className: 'panel-content', children: [
+            editorError && _jsx('p', { id: 'editorError', role: 'alert', className: 'message message-error', children: editorError }),
+            isActive ? _jsxs(React.Fragment, { children: [
+                _jsxs('section', { className: 'inspector-section arrow-identity', 'aria-labelledby': 'editingHeading', children: [
+                    _jsxs('div', { className: 'section-heading', children: [
+                        _jsx('h2', { id: 'editingHeading', children: isDrawing ? 'Neuer Pfeil' : 'Pfeil bearbeiten' }),
+                        _jsx('span', { className: 'count-badge', role: 'status', children: `${anchorCount} ${anchorCount === 1 ? 'Stützpunkt' : 'Stützpunkte'}` }),
+                    ] }),
+                    _jsx('label', { htmlFor: 'arrowNameInput', className: 'field-label', children: 'Name' }),
+                    _jsx('input', { id: 'arrowNameInput', type: 'text', className: 'text-input', placeholder: 'Pfeil benennen', value: arrowName, disabled: !canEditName, onFocus: onBeginChange, onBlur: onEndChange, onChange: event => onArrowNameChange(event.target.value) }),
+                    _jsx('p', { className: 'hint', children: isDrawing
+                        ? anchorCount < 2 ? 'Setze mindestens zwei Punkte auf der Karte.' : 'Klicke für weitere Punkte oder stelle den Pfeil fertig.'
+                        : 'Ziehe die Punkte und Griffe. Umschalt + Klick auf den Pfeil fügt einen Punkt hinzu.' }),
+                ] }),
+                _jsxs('section', { className: 'inspector-section', 'aria-labelledby': 'formHeading', children: [
+                    _jsx('h2', { id: 'formHeading', children: _jsxs('button', { id: 'toggleFormBtn', type: 'button', className: 'section-toggle', onClick: () => setShowForm(value => !value), 'aria-expanded': showForm, 'aria-controls': 'formControls', children: [
+                        _jsx('span', { children: 'Form' }),
+                        _jsx(Icon, { name: 'chevron', className: showForm ? 'is-open' : '' }),
+                    ] }) }),
+                    _jsxs('div', { id: 'formControls', hidden: !showForm, children: [
+                        !canEditParameters && _jsx('p', { className: 'hint', children: 'Ab zwei Stützpunkten kannst du die Form anpassen.' }),
+                        slider('shaftThicknessSlider', 'Schaftdicke', 2, 120, 1, shaftThickness, 'shaftThickness'),
+                        slider('headLengthSlider', 'Spitzenlänge', 2, 240, 1, headLength, 'headLength'),
+                        slider('headWidthSlider', 'Spitzenbreite', 2, 240, 1, headWidth, 'headWidth'),
+                        _jsxs('details', { className: 'advanced-controls', children: [
+                            _jsx('summary', { children: 'Verjüngung & Maßstab' }),
+                            slider('rearTaperSlider', 'Schaft hinten', 0.2, 2.5, 0.01, rearTaper, 'rearTaper'),
+                            slider('frontTaperSlider', 'Schaft vorne', 0.2, 2.5, 0.01, frontTaper, 'frontTaper'),
+                            _jsx('p', { id: 'parameterUnits', className: 'hint', children: parameterBaseZoom !== null
+                                ? `Pixelwerte beziehen sich auf Zoom ${parameterBaseZoom}. Aktuell: Zoom ${mapZoom ?? parameterBaseZoom}, Faktor ${Math.pow(2, (mapZoom ?? parameterBaseZoom) - parameterBaseZoom).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+                                : 'Pixelwerte beziehen sich auf die Zoomstufe beim Anlegen. Schaft hinten und vorne sind Faktoren.' }),
+                        ] }),
+                        _jsxs('button', { id: 'pickShapeBtn', type: 'button', className: `button button-secondary full-width ${isPickingShape ? 'is-pressed' : ''}`, 'aria-pressed': isPickingShape, disabled: !canPickShape, title: canPickShape ? 'Form von einem anderen Pfeil übernehmen' : 'Du brauchst zwei Stützpunkte und einen weiteren fertigen Pfeil als Quelle', onClick: onToggleShapePicker, children: [_jsx(Icon, { name: 'pipette' }), isPickingShape ? 'Formübernahme abbrechen' : 'Form übernehmen'] }),
+                        isPickingShape && _jsx('p', { id: 'shapePickerHint', role: 'status', className: 'hint accent-text', children: 'Klicke auf den Quellpfeil. Esc beendet die Formübernahme.' }),
+                    ] }),
+                ] }),
+                _jsxs('section', { className: 'inspector-section point-help', 'aria-label': 'Punkte bedienen', children: [
+                    _jsxs('div', { className: 'point-legend', children: [
+                        _jsxs('span', { children: [_jsx('i', { className: 'legend-anchor', 'aria-hidden': 'true' }), 'Stützpunkt'] }),
+                        _jsxs('span', { children: [_jsx('i', { className: 'legend-handle', 'aria-hidden': 'true' }), 'Kurvengriff'] }),
+                    ] }),
+                    _jsx('p', { id: 'pointKeyboardHint', className: 'hint', children: 'Mit Tab einen Punkt fokussieren. Pfeiltasten: 1 px, mit Umschalt: 10 px verschieben.' }),
+                    _jsxs('div', { className: 'object-actions', children: [
+                        _jsxs('button', { id: 'copyArrowBtn', type: 'button', className: 'button button-secondary', disabled: !canCopyArrow, title: canCopyArrow ? 'Pfeil duplizieren' : 'Setze zuerst mindestens zwei Stützpunkte', onClick: onCopyArrow, children: [_jsx(Icon, { name: 'copy' }), 'Duplizieren'] }),
+                        canDeleteArrow && _jsxs('button', { id: 'deleteArrowBtn', type: 'button', className: 'button button-danger', onClick: onDeleteArrow, title: 'Pfeil löschen; lässt sich rückgängig machen', children: [_jsx(Icon, { name: 'trash' }), 'Löschen'] }),
+                    ] }),
+                ] }),
+            ] }) : _jsxs(React.Fragment, { children: [
+                _jsxs('section', { className: 'inspector-section start-section', 'aria-labelledby': 'drawHeading', children: [
+                    _jsx('h2', { id: 'drawHeading', children: 'Zeichnen' }),
+                    _jsx('p', { className: 'hint', children: 'Verbinde Punkte auf der Karte zu einem Pfeil. Die Form kannst du anschließend verfeinern.' }),
+                    _jsxs('button', { id: 'drawArrowBtn', type: 'button', className: 'button button-primary full-width', onClick: onDrawArrow, children: [_jsx(Icon, { name: 'plus' }), 'Neuen Pfeil zeichnen'] }),
+                ] }),
+                _jsxs('section', { className: 'inspector-section', 'aria-labelledby': 'arrowsHeading', children: [
+                    _jsxs('div', { className: 'section-heading', children: [_jsx('h2', { id: 'arrowsHeading', children: 'Pfeile im Projekt' }), _jsx('span', { className: 'count-badge', children: savedArrows.length })] }),
+                    savedArrows.length ? _jsx('ul', { className: 'arrow-list', children: savedArrows.map(arrow => _jsx('li', { children: _jsxs('button', {
+                        className: 'arrow-list-item', type: 'button', onClick: () => onSelectArrow(arrow.id), title: `${arrow.name} bearbeiten`, children: [
+                            _jsx(Icon, { name: 'arrow' }), _jsx('span', { children: arrow.name }), _jsx(Icon, { name: 'chevronRight' }),
+                        ],
+                    }) }, arrow.id)) }) : _jsx('p', { className: 'empty-state', children: 'Noch keine Pfeile. Starte mit deinem ersten Pfeil oder lade eine Projektdatei.' }),
+                ] }),
+            ] }),
+            _jsx(TemplateControls, { fileNames: templateFileNames, onLoad: onLoadTemplate, onClear: onClearTemplate, onNotify }),
+        ] }),
+        _jsxs('footer', { className: 'panel-footer', children: [
+            isActive && _jsxs('div', { className: 'editing-actions', children: [
+                _jsxs('button', { id: 'finishArrowBtn', type: 'button', className: 'button button-primary', disabled: !canFinishArrow, title: canFinishArrow ? 'Pfeil ins Projekt übernehmen (Enter). Die Projektdatei separat speichern.' : 'Setze mindestens zwei unterschiedliche Stützpunkte', onClick: onFinishArrow, children: [_jsx(Icon, { name: 'check' }), 'Pfeil fertigstellen'] }),
+                _jsx('button', { id: 'cancelArrowBtn', type: 'button', className: 'button button-secondary', title: 'Bearbeitung verwerfen (Esc)', onClick: onCancelArrow, children: 'Abbrechen' }),
+            ] }),
+            _jsxs('div', { className: `feedback ${notice?.tone === 'error' ? 'message-error' : ''}`, 'aria-live': 'polite', 'aria-atomic': 'true', children: notice ? [
+                _jsx(Icon, { name: notice.tone === 'error' ? 'info' : 'check' }),
+                _jsx('span', { children: notice.message }, notice.id),
+                _jsx('button', { type: 'button', className: 'dismiss-button', 'aria-label': 'Meldung schließen', onClick: onDismissNotice, children: _jsx(Icon, { name: 'close' }) }),
+            ] : _jsx('span', { className: 'footer-hint', children: isActive ? 'Fertigstellen übernimmt den Pfeil ins Projekt.' : 'Als Projektdatei später weiterbearbeiten.' }) }),
+            _jsx(ProjectControls, { onSave: onSaveProject, onLoad: onLoadProject, hasUnsavedChanges, onNotify }),
+            _jsxs('div', { className: 'export-control', ref: exportRef, onBlur: event => { if (!event.currentTarget.contains(event.relatedTarget)) setShowExport(false); }, onKeyDown: event => {
+                if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setShowExport(false); exportRef.current.querySelector('#exportMenuBtn').focus(); }
+            }, children: [
+                _jsxs('button', { id: 'exportMenuBtn', type: 'button', className: 'button button-quiet export-trigger', 'aria-expanded': showExport, 'aria-controls': 'exportOptions', onClick: () => setShowExport(value => !value), children: [_jsx(Icon, { name: 'download' }), 'GeoJSON exportieren', _jsx(Icon, { name: 'chevron', className: showExport ? 'is-open' : '' })] }),
+                _jsxs('div', { id: 'exportOptions', className: 'export-options', hidden: !showExport, children: [
+                    _jsxs('button', { id: 'saveAllGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canSaveAllGeoJson, onClick: () => { onSaveAllGeoJson(); setShowExport(false); }, children: [_jsx('strong', { children: 'Alle Pfeile als Datei exportieren' }), _jsx('span', { children: isActive ? 'Zuerst die aktuelle Bearbeitung fertigstellen.' : savedArrows.length ? `${savedArrows.length} ${savedArrows.length === 1 ? 'Pfeil' : 'Pfeile'} · .geojson` : 'Zeichne zuerst einen Pfeil.' })] }),
+                    _jsxs('button', { id: 'copyGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canCopyGeoJson, onClick: () => { onCopyGeoJson(); setShowExport(false); }, children: [_jsx('strong', { children: 'Aktuellen Pfeil kopieren' }), _jsx('span', { children: canCopyGeoJson ? 'GeoJSON in die Zwischenablage kopieren.' : 'Pfeil auswählen oder mindestens zwei Punkte zeichnen.' })] }),
+                ] }),
+            ] }),
+        ] }),
+    ] });
 };
 
 export default ControlPanel;
-
