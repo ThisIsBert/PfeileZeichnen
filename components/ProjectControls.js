@@ -21,7 +21,7 @@ const ProjectControls = ({ onSave, onLoad }) => {
     };
     const buttonClass = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:opacity-50';
     return _jsxs('section', { 'aria-labelledby': 'projectHeading', className: 'mt-3 rounded-xl border border-cyan-200 bg-cyan-50 p-3', children: [
-        _jsx('h2', { id: 'projectHeading', className: 'text-sm font-semibold text-slate-800', children: 'Projektdatei' }),
+        _jsx('h2', { id: 'projectHeading', className: 'text-sm font-semibold text-slate-800', children: 'Aktuellen Stand speichern' }),
         _jsx('p', { className: 'mt-1 text-xs text-slate-600', children: 'Pfeile, Entwurf, Vorlage und Kartenausschnitt zum Weiterbearbeiten speichern.' }),
         _jsx('input', { ref: inputRef, id: 'projectFileInput', type: 'file', hidden: true, accept: '.pfeile.json,.json,application/json', onChange: load }),
         _jsxs('div', { className: 'mt-2 grid grid-cols-2 gap-2', children: [
