@@ -667,7 +667,7 @@ const App = () => {
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        notify('Aktueller Pfeil als GeoJSON exportiert.');
+        notify('Ausgewählter Pfeil als GeoJSON exportiert.');
     }, [generateCurrentGeoJson, notify]);
     const handleCopyGeoJson = useCallback(async () => {
         const feature = generateCurrentGeoJson();
@@ -687,7 +687,7 @@ const App = () => {
     }, [generateCurrentGeoJson, notify]);
     const handleSaveAllGeoJson = useCallback(() => {
         if (editingState !== EditingState.Idle && currentAnchors.length > 0) {
-            notify('Stelle die aktuelle Bearbeitung fertig oder brich sie ab, bevor du alle Pfeile exportierst.', 'error');
+            notify('Stelle die Bearbeitung des ausgewählten Pfeils fertig oder brich sie ab, bevor du alle Pfeile exportierst.', 'error');
             return;
         }
         const features = [];
