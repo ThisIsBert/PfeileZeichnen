@@ -637,20 +637,40 @@ const App = () => {
             return null;
         return generateGeoJsonForArrow(map, anchorsData, params, name);
     }, []);
-    const handleCopyGeoJson = useCallback(async () => {
+    const generateCurrentGeoJson = useCallback(() => {
         if (editingState === EditingState.Idle || currentAnchors.length < 2)
             return;
         const rearWidthPx = Math.max(2, shaftThicknessPx * rearTaper);
         const neckWidthPx = Math.max(2, shaftThicknessPx * frontTaper);
         const headLengthPx = currentHeadLengthPx ?? DEFAULT_HEAD_LENGTH_PX;
         const headWidthPx = currentHeadWidthPx ?? DEFAULT_HEAD_WIDTH_PX;
-        const feature = generateGeoJsonForArrowForMap(getAnchorsData(), createArrowParameters({
+        return generateGeoJsonForArrowForMap(getAnchorsData(), createArrowParameters({
             rearWidthPx,
             neckWidthPx,
             headLengthPx,
             headWidthPx,
             baseZoom: currentParamsBaseZoom ?? (mapRef.current ? mapRef.current.getZoom() : 0)
         }), currentArrowName);
+    }, [editingState, currentAnchors.length, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, generateGeoJsonForArrowForMap]);
+    const handleSaveGeoJson = useCallback(() => {
+        const feature = generateCurrentGeoJson();
+        if (!feature) {
+            notify('GeoJSON konnte nicht erstellt werden. Prüfe die Stützpunkte des Pfeils.', 'error');
+            return;
+        }
+        const blob = new Blob([JSON.stringify(feature, null, 2)], { type: 'application/geo+json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'pfeil.geojson';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        notify('Aktueller Pfeil als GeoJSON exportiert.');
+    }, [generateCurrentGeoJson, notify]);
+    const handleCopyGeoJson = useCallback(async () => {
+        const feature = generateCurrentGeoJson();
         if (feature) {
             const jsonString = JSON.stringify(feature, null, 2);
             try {
@@ -664,7 +684,7 @@ const App = () => {
         else {
             notify('GeoJSON konnte nicht erstellt werden. Prüfe die Stützpunkte des Pfeils.', 'error');
         }
-    }, [editingState, currentAnchors.length, getAnchorsData, shaftThicknessPx, rearTaper, frontTaper, currentHeadLengthPx, currentHeadWidthPx, currentArrowName, currentParamsBaseZoom, generateGeoJsonForArrowForMap, notify]);
+    }, [generateCurrentGeoJson, notify]);
     const handleSaveAllGeoJson = useCallback(() => {
         if (editingState !== EditingState.Idle && currentAnchors.length > 0) {
             notify('Stelle die aktuelle Bearbeitung fertig oder brich sie ab, bevor du alle Pfeile exportierst.', 'error');
@@ -1193,6 +1213,7 @@ const App = () => {
         onDeleteArrow: () => { history.run(handleDeleteSelectedArrow); notify('Pfeil gelöscht. Mit Rückgängig wiederherstellen.'); },
         onArrowNameChange: value => history.run(() => setCurrentArrowName(value)),
         onCopyGeoJson: handleCopyGeoJson,
+        onSaveGeoJson: handleSaveGeoJson,
         onSaveAllGeoJson: handleSaveAllGeoJson,
         onShapeParamChange: (key, value) => history.run(() => handleShapeParamChange(key, value)),
     };

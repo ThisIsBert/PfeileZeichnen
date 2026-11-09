@@ -21,7 +21,7 @@ const ControlPanel = ({ uiState, actions }) => {
         onBeginChange, onEndChange, onArrowNameChange, onShapeParamChange,
         onToggleShapePicker, onCopyArrow, onDeleteArrow, onSelectArrow,
         onSaveProject, onLoadProject, onLoadTemplate, onClearTemplate,
-        onCopyGeoJson, onSaveAllGeoJson, onNotify, onDismissNotice,
+        onCopyGeoJson, onSaveGeoJson, onSaveAllGeoJson, onNotify, onDismissNotice,
     } = actions;
     const isActive = editingState !== EditingState.Idle;
     const isDrawing = editingState === EditingState.DrawingNew;
@@ -139,6 +139,7 @@ const ControlPanel = ({ uiState, actions }) => {
             }, children: [
                 _jsxs('button', { id: 'exportMenuBtn', type: 'button', className: 'button button-quiet export-trigger', 'aria-expanded': showExport, 'aria-controls': 'exportOptions', onClick: () => setShowExport(value => !value), children: [_jsx(Icon, { name: 'download' }), 'GeoJSON exportieren', _jsx(Icon, { name: 'chevron', className: showExport ? 'is-open' : '' })] }),
                 _jsxs('div', { id: 'exportOptions', className: 'export-options', hidden: !showExport, children: [
+                    _jsxs('button', { id: 'saveGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canCopyGeoJson, onClick: () => { onSaveGeoJson(); setShowExport(false); }, children: [_jsx('strong', { children: 'Aktuellen Pfeil als Datei exportieren' }), _jsx('span', { children: canCopyGeoJson ? 'Aktuelle Form inklusive Bearbeitung · .geojson' : 'Pfeil auswählen oder mindestens zwei Punkte zeichnen.' })] }),
                     _jsxs('button', { id: 'saveAllGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canSaveAllGeoJson, onClick: () => { onSaveAllGeoJson(); setShowExport(false); }, children: [_jsx('strong', { children: 'Alle Pfeile als Datei exportieren' }), _jsx('span', { children: isActive ? 'Zuerst die aktuelle Bearbeitung fertigstellen.' : savedArrows.length ? `${savedArrows.length} ${savedArrows.length === 1 ? 'Pfeil' : 'Pfeile'} · .geojson` : 'Zeichne zuerst einen Pfeil.' })] }),
                     _jsxs('button', { id: 'copyGeoJsonBtn', type: 'button', className: 'export-option', disabled: !canCopyGeoJson, onClick: () => { onCopyGeoJson(); setShowExport(false); }, children: [_jsx('strong', { children: 'Aktuellen Pfeil kopieren' }), _jsx('span', { children: canCopyGeoJson ? 'GeoJSON in die Zwischenablage kopieren.' : 'Pfeil auswählen oder mindestens zwei Punkte zeichnen.' })] }),
                 ] }),

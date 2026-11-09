@@ -21,7 +21,7 @@ const TemplateControls = ({ onLoad, onClear, fileNames, onNotify }) => {
     };
     return _jsxs('details', { className: 'inspector-section template-controls', children: [
         _jsxs('summary', { children: [_jsx(Icon, { name: 'layers' }), 'Vorlagen', fileNames.length > 0 && _jsx('span', { className: 'count-badge', children: fileNames.length })] }),
-        _jsx('p', { className: 'hint', children: 'GeoJSON als Zeichenhilfe laden. Die Vorlage bleibt unverändert und wird nicht mit den Pfeilen exportiert.' }),
+        _jsx('p', { className: 'hint', children: 'GeoJSON als Vorlage laden. Über „Vorlage“ links ein- und ausblenden. Vorlagen werden nicht mit den Pfeilen exportiert.' }),
         _jsx('input', { ref: inputRef, id: 'templateFileInput', type: 'file', hidden: true, multiple: true, accept: '.geojson,.json,application/geo+json,application/json', onChange: loadFiles }),
         _jsxs('div', { className: 'template-actions', children: [
             _jsxs('button', { id: 'loadTemplateBtn', type: 'button', disabled: isLoading, onClick: () => inputRef.current.click(), className: 'button button-secondary', children: [_jsx(Icon, { name: 'folder' }), isLoading ? 'Wird geladen …' : 'Vorlage laden'] }),
