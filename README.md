@@ -22,7 +22,7 @@ The desktop interface is styled locally in `styles.css`; no runtime CSS generato
 
 ## Desktop workspace
 
-The map and the inspector have separate areas. Only the inspector's properties scroll; finish/cancel stay visible below the properties. Document tools are separate from arrow editing, in priority order: **GeoJSON exportieren**, **Projekt speichern & laden**, **Vorlagen**. All three use the same disclosure pattern; opening one closes the other. Their own scroll area keeps expanded tools from displacing the editing actions on short desktop windows. The idle inspector offers drawing and an accessible list of finished arrows. Selecting an arrow reveals its name and form. Rear/front taper and reference-zoom details are under **Verjüngung & Maßstab**.
+The map and the inspector have separate areas. Only the inspector's properties scroll; finish/cancel stay visible below the properties. Document tools are separate from arrow editing, in priority order: **GeoJSON exportieren**, **Projekt speichern & laden**, **Vorlagen**. All three use the same disclosure pattern; opening one closes the other. Their own scroll area keeps expanded tools from displacing the editing actions on short desktop windows. The idle inspector offers drawing and an accessible list of finished arrows. Selecting an arrow reveals its name and form. All five form sliders are shown together, followed by full-width shape-copy, duplicate and delete actions.
 
 **dezente Karte** reduces the basemap's saturation without changing arrows or exports. Stützpunkte and Kurvengriffe each have a 28 px hit area. Focus a point with Tab and move it with the arrow keys (1 screen pixel, or 10 with Shift). Finished arrows can also be selected from the list or with Enter/Space on their map outline.
 
@@ -40,9 +40,7 @@ The map and the inspector have separate areas. Only the inspector's properties s
 
 **Rückgängig** / **Wiederholen** and Ctrl/Cmd+Z, Ctrl+Y or Ctrl/Cmd+Shift+Z restore up to 100 arrow actions in the current session. Drawing anchors, dragging an anchor/handle/arrow, name and form changes, eyedropper, copy, delete, finish and cancel are included. Each drag or slider gesture is one step. Map navigation and reference layers are independent of this arrow history.
 
-Each form slider also has a numeric field. Enter commits that field; Escape restores its value from before typing. Empty fields revert to their last valid value, and values outside the displayed limits are clamped on commit. Native text undo remains available while typing in a field.
-
-Pixel sizes refer to the arrow's **reference zoom**, shown alongside the current zoom and scale factor under **Verjüngung & Maßstab**. Rear/front taper are dimensionless factors. The original shaft thickness and taper values are stored, so reselecting, copying or sampling an arrow keeps the same numbers. Older width-only records remain supported.
+Form controls use sliders without numeric fields or unit annotations. Dragging a slider or holding an adjustment key is one undo step. The original form settings and reference zoom remain stored internally, so reselecting, copying or sampling an arrow preserves its geometry and settings. Older width-only records remain supported.
 
 If arrow geometry cannot be saved, the draft, name, form values and cancel baseline remain available. Fix the geometry, undo the last edit, or cancel explicitly. Copying or selecting another arrow cannot bypass a failed save.
 

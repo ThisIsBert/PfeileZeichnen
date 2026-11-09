@@ -13,7 +13,7 @@ const ControlPanel = ({ uiState, actions }) => {
         hasUnsavedChanges, projectFileName, notice, editorError,
         canUndo, canRedo, canFinishArrow, canCopyArrow, canDeleteArrow,
         canEditName, canEditParameters, canPickShape, isPickingShape,
-        canCopyGeoJson, canSaveAllGeoJson, parameterBaseZoom, mapZoom,
+        canCopyGeoJson, canSaveAllGeoJson,
         shaftThickness, headLength, headWidth, rearTaper, frontTaper,
     } = uiState;
     const {
@@ -74,24 +74,16 @@ const ControlPanel = ({ uiState, actions }) => {
                         slider('shaftThicknessSlider', 'Schaftdicke', 2, 120, 1, shaftThickness, 'shaftThickness'),
                         slider('headLengthSlider', 'Spitzenlänge', 2, 240, 1, headLength, 'headLength'),
                         slider('headWidthSlider', 'Spitzenbreite', 2, 240, 1, headWidth, 'headWidth'),
-                        _jsxs('details', { className: 'advanced-controls', children: [
-                            _jsx('summary', { children: 'Verjüngung & Maßstab' }),
-                            slider('rearTaperSlider', 'Schaft hinten', 0.2, 2.5, 0.01, rearTaper, 'rearTaper'),
-                            slider('frontTaperSlider', 'Schaft vorne', 0.2, 2.5, 0.01, frontTaper, 'frontTaper'),
-                            _jsx('p', { id: 'parameterUnits', className: 'hint', children: parameterBaseZoom !== null
-                                ? `Pixelwerte beziehen sich auf Zoom ${parameterBaseZoom}. Aktuell: Zoom ${mapZoom ?? parameterBaseZoom}, Faktor ${Math.pow(2, (mapZoom ?? parameterBaseZoom) - parameterBaseZoom).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
-                                : 'Pixelwerte beziehen sich auf die Zoomstufe beim Anlegen. Schaft hinten und vorne sind Faktoren.' }),
+                        slider('rearTaperSlider', 'Schaft hinten', 0.2, 2.5, 0.01, rearTaper, 'rearTaper'),
+                        slider('frontTaperSlider', 'Schaft vorne', 0.2, 2.5, 0.01, frontTaper, 'frontTaper'),
+                        _jsxs('div', { className: 'object-actions', children: [
+                            _jsxs('button', { id: 'pickShapeBtn', type: 'button', className: `button button-secondary full-width ${isPickingShape ? 'is-pressed' : ''}`, 'aria-pressed': isPickingShape, disabled: !canPickShape, title: canPickShape ? 'Form von anderem Pfeil kopieren' : 'Du brauchst zwei Stützpunkte und einen weiteren fertigen Pfeil als Quelle', onClick: onToggleShapePicker, children: [_jsx(Icon, { name: 'pipette' }), isPickingShape ? 'Kopieren der Form abbrechen' : 'Form von anderem Pfeil kopieren'] }),
+                            isPickingShape && _jsx('p', { id: 'shapePickerHint', role: 'status', className: 'hint accent-text', children: 'Klicke auf den Pfeil, dessen Form du kopieren möchtest. Esc bricht ab.' }),
+                            _jsxs('button', { id: 'copyArrowBtn', type: 'button', className: 'button button-secondary full-width', disabled: !canCopyArrow, title: canCopyArrow ? 'Pfeil duplizieren' : 'Setze zuerst mindestens zwei Stützpunkte', onClick: onCopyArrow, children: [_jsx(Icon, { name: 'copy' }), 'Duplizieren'] }),
+                            canDeleteArrow && _jsxs('button', { id: 'deleteArrowBtn', type: 'button', className: 'button button-secondary full-width', onClick: onDeleteArrow, title: 'Pfeil löschen; lässt sich rückgängig machen', children: [_jsx(Icon, { name: 'trash' }), 'Löschen'] }),
                         ] }),
-                        _jsxs('button', { id: 'pickShapeBtn', type: 'button', className: `button button-secondary full-width ${isPickingShape ? 'is-pressed' : ''}`, 'aria-pressed': isPickingShape, disabled: !canPickShape, title: canPickShape ? 'Form von anderem Pfeil kopieren' : 'Du brauchst zwei Stützpunkte und einen weiteren fertigen Pfeil als Quelle', onClick: onToggleShapePicker, children: [_jsx(Icon, { name: 'pipette' }), isPickingShape ? 'Kopieren der Form abbrechen' : 'Form von anderem Pfeil kopieren'] }),
-                        isPickingShape && _jsx('p', { id: 'shapePickerHint', role: 'status', className: 'hint accent-text', children: 'Klicke auf den Pfeil, dessen Form du kopieren möchtest. Esc bricht ab.' }),
                     ] }),
-                ] }),
-                _jsxs('section', { className: 'inspector-section point-help', 'aria-label': 'Punkte bedienen', children: [
-                    _jsx('p', { id: 'pointKeyboardHint', className: 'sr-only', children: 'Mit Tab einen Punkt fokussieren. Pfeiltasten: 1 px, mit Umschalt: 10 px verschieben.' }),
-                    _jsxs('div', { className: 'object-actions', children: [
-                        _jsxs('button', { id: 'copyArrowBtn', type: 'button', className: 'button button-secondary', disabled: !canCopyArrow, title: canCopyArrow ? 'Pfeil duplizieren' : 'Setze zuerst mindestens zwei Stützpunkte', onClick: onCopyArrow, children: [_jsx(Icon, { name: 'copy' }), 'Duplizieren'] }),
-                        canDeleteArrow && _jsxs('button', { id: 'deleteArrowBtn', type: 'button', className: 'button button-danger', onClick: onDeleteArrow, title: 'Pfeil löschen; lässt sich rückgängig machen', children: [_jsx(Icon, { name: 'trash' }), 'Löschen'] }),
-                    ] }),
+                    _jsx('p', { id: 'pointKeyboardHint', className: 'sr-only', children: 'Mit Tab einen Punkt fokussieren. Pfeiltasten verschieben ihn, mit Umschalt in größeren Schritten.' }),
                 ] }),
             ] }) : _jsxs(React.Fragment, { children: [
                 _jsxs('section', { className: 'inspector-section start-section', 'aria-labelledby': 'drawHeading', children: [
