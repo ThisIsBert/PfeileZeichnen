@@ -28,7 +28,6 @@ const ProjectControls = ({ onSave, onLoad }) => {
             _jsx('button', { id: 'saveProjectBtn', type: 'button', disabled: busy, onClick: () => run(onSave, 'Projektdatei zum Herunterladen erstellt.'), className: buttonClass, children: 'Projekt speichern' }),
             _jsx('button', { id: 'loadProjectBtn', type: 'button', disabled: busy, onClick: () => inputRef.current?.click(), className: buttonClass, children: busy ? 'Bitte warten …' : 'Projekt laden' }),
         ] }),
-        _jsx('p', { className: 'mt-2 text-xs text-slate-600', children: 'Laden ersetzt den aktuellen Stand. Der Undo-Verlauf beginnt neu.' }),
         status && _jsx('p', { id: 'projectStatus', role: 'status', className: 'mt-2 break-words text-xs text-cyan-800', children: status }),
         error && _jsx('p', { id: 'projectError', role: 'alert', className: 'mt-2 text-xs text-rose-700', children: error }),
     ] });

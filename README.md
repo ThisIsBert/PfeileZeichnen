@@ -35,7 +35,7 @@ Runtime CDN imports are pinned and documented in `DEPENDENCIES.md`.
 
 Each form slider also has a numeric field. Enter commits that field; Escape restores its value from before typing. Empty fields revert to their last valid value, and values outside the displayed limits are clamped on commit. Native text undo remains available while typing in a field.
 
-Pixel sizes refer to the arrow's **reference zoom**, shown alongside the current zoom and scale factor. Rear/front taper are dimensionless factors. The original shaft thickness and taper values are stored, so reselecting, copying or sampling an arrow keeps the same numbers. Older width-only records remain supported.
+Pixel sizes refer to the arrow's **reference zoom**, stored with the arrow. Rear/front taper are dimensionless factors. The original shaft thickness and taper values are stored, so reselecting, copying or sampling an arrow keeps the same numbers. Older width-only records remain supported.
 
 If arrow geometry cannot be saved, the draft, name, form values and cancel baseline remain available. Fix the geometry, undo the last edit, or cancel explicitly. Copying or selecting another arrow cannot bypass a failed save.
 
@@ -43,7 +43,7 @@ If arrow geometry cannot be saved, the draft, name, form values and cancel basel
 
 Use **Projekt speichern** to download `projekt.pfeile.json`, and **Projekt laden** to continue editing it later. A project includes saved arrows with all anchors, Bezier handles, names, original form values and reference zooms; the open drawing/editing session and its cancel baseline; template geometries, file names and visibility; and the map center and zoom. Even unfinished or geometrically invalid drafts can be saved without finishing them.
 
-Loading replaces the current project and starts a fresh undo/redo history. The entire file and saved arrow geometry are checked before changing the current state. Unsupported versions, malformed files, invalid geometry and files above 20 MB leave the current project intact. The file format is versioned independently of GeoJSON; use **GeoJSON speichern** to export finished outlines for other software. No autosave or browser storage is used.
+Loading replaces the current project and starts a fresh undo/redo history. The entire file and saved arrow geometry are checked before changing the current state. Unsupported versions, malformed files, invalid geometry and files above 20 MB leave the current project intact. The file format is versioned independently of GeoJSON; use **GeoJSON speichern** to export the current arrow outline as `pfeil.geojson`, including edits or an unfinished draft with at least two anchors. **GeoJSON kopieren** copies that same Feature to the clipboard. **Alle Pfeile als GeoJSON speichern** exports all finished outlines as a FeatureCollection for other software. No autosave or browser storage is used.
 
 ## GeoJSON templates
 
